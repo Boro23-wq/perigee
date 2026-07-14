@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/Boro23-wq/trellis/backend/db"
+	"github.com/Boro23-wq/perigee/backend/db"
 )
 
 type Profile struct {

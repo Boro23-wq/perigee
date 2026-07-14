@@ -3,7 +3,30 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Logo } from "@/components/Logo";
+import { PerigeeMark } from "@/components/Logo";
+
+function AuthBackdrop() {
+  return (
+    <>
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage:
+            "linear-gradient(to right, rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.035) 1px, transparent 1px)",
+          backgroundSize: "44px 44px",
+          maskImage: "radial-gradient(ellipse 60% 50% at 50% 0%, black 0%, transparent 75%)",
+          WebkitMaskImage: "radial-gradient(ellipse 60% 50% at 50% 0%, black 0%, transparent 75%)",
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 -top-30 h-80 w-80 -translate-x-1/2 rounded-full opacity-25 blur-[100px]"
+        style={{ background: "#0068ff" }}
+      />
+    </>
+  );
+}
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -32,83 +55,95 @@ export default function SignupPage() {
 
   if (status === "sent") {
     return (
-      <div className="flex min-h-full flex-col items-center justify-center px-6 text-center">
-        <Logo className="mb-6" />
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Check your email
-        </h1>
-        <p className="mt-2 max-w-xs text-muted">
-          We sent a verification link to <strong>{email}</strong>. Click it to
-          activate your account, then log in.
-        </p>
-        <Link
-          href="/login"
-          className="mt-6 rounded-full bg-accent px-6 py-3 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
-        >
-          Go to login
-        </Link>
+      <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#07070a] px-6 py-12 text-center">
+        <AuthBackdrop />
+        <div className="relative flex flex-col items-center">
+          <PerigeeMark className="h-12 w-auto" style={{ aspectRatio: "100 / 120" }} />
+          <h1 className="mt-5 text-2xl font-semibold tracking-tight text-white">
+            Check your email
+          </h1>
+          <p className="mt-2 max-w-70 text-[13px] text-white/50">
+            We sent a verification link to <strong className="text-white/80">{email}</strong>.
+            Click it to activate your account, then log in.
+          </p>
+          <Link
+            href="/login"
+            className="mt-6 rounded-lg bg-linear-to-b from-[#2f9bff] to-[#0068ff] px-4 py-2.5 text-[13px] font-medium text-white shadow-[0_8px_24px_-8px_rgba(0,104,255,0.6)] transition-opacity hover:opacity-90"
+          >
+            Go to login
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-full flex-col items-center justify-center px-6">
-      <div className="w-full max-w-sm">
-        <Logo className="mb-8 justify-center" />
-        <h1 className="text-center text-2xl font-semibold tracking-tight">
-          Create your account
-        </h1>
+    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#07070a] px-6 py-12">
+      <AuthBackdrop />
 
-        <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="email" className="text-sm font-medium">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="rounded-xl border border-border bg-surface px-4 py-3 text-base outline-none focus:border-accent"
-            />
-          </div>
+      <Link
+        href="/login"
+        className="absolute right-6 top-6 text-[13px] text-white/50 transition-colors hover:text-white"
+      >
+        Have an account? <span className="font-medium text-[#4da3ff]">Log in</span>
+      </Link>
 
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="password" className="text-sm font-medium">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              minLength={8}
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="rounded-xl border border-border bg-surface px-4 py-3 text-base outline-none focus:border-accent"
-            />
-            <p className="text-xs text-muted">At least 8 characters.</p>
-          </div>
+      <div className="relative w-full max-w-90">
+        <div className="flex flex-col items-center">
+          <PerigeeMark className="h-12 w-auto" style={{ aspectRatio: "100 / 120" }} />
+          <h1 className="mt-5 text-2xl font-semibold tracking-tight text-white">
+            Create your account
+          </h1>
+          <p className="mt-1.5 text-[13px] text-white/50">
+            Track your progress. Stay consistent.
+          </p>
+        </div>
 
-          {error && <p className="text-sm text-danger">{error}</p>}
+        <div className="mt-8 rounded-2xl border border-white/10 bg-white/3 p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02),0_20px_60px_-15px_rgba(0,104,255,0.15)] backdrop-blur-xl">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="email" className="text-[11px] font-medium uppercase tracking-wide text-white/40">
+                Email address
+              </label>
+              <input
+                id="email"
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="rounded-lg border border-white/10 bg-white/4 px-3 py-2.5 text-[13px] text-white outline-none transition-shadow placeholder:text-white/30 focus:border-[#4da3ff] focus:ring-2 focus:ring-[#0068ff]/25"
+              />
+            </div>
 
-          <button
-            type="submit"
-            disabled={status === "loading"}
-            className="mt-2 rounded-full bg-accent px-6 py-3 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {status === "loading" ? "Creating account…" : "Sign up"}
-          </button>
-        </form>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="password" className="text-[11px] font-medium uppercase tracking-wide text-white/40">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                required
+                minLength={8}
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="rounded-lg border border-white/10 bg-white/4 px-3 py-2.5 text-[13px] text-white outline-none transition-shadow placeholder:text-white/30 focus:border-[#4da3ff] focus:ring-2 focus:ring-[#0068ff]/25"
+              />
+              <p className="text-xs text-white/30">At least 8 characters.</p>
+            </div>
 
-        <p className="mt-6 text-center text-sm text-muted">
-          Already have an account?{" "}
-          <Link href="/login" className="font-medium text-accent">
-            Log in
-          </Link>
-        </p>
+            {error && <p className="text-[13px] text-[#f87171]">{error}</p>}
+
+            <button
+              type="submit"
+              disabled={status === "loading"}
+              className="mt-1 rounded-lg bg-linear-to-b from-[#2f9bff] to-[#0068ff] px-4 py-2.5 text-[13px] font-medium text-white shadow-[0_8px_24px_-8px_rgba(0,104,255,0.6)] transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {status === "loading" ? "Creating account…" : "Continue"}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );

@@ -8,9 +8,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 
-	"github.com/Boro23-wq/trellis/backend/db"
-	"github.com/Boro23-wq/trellis/backend/handlers"
-	"github.com/Boro23-wq/trellis/backend/middleware"
+	"github.com/Boro23-wq/perigee/backend/db"
+	"github.com/Boro23-wq/perigee/backend/handlers"
+	"github.com/Boro23-wq/perigee/backend/middleware"
 )
 
 func main() {
@@ -29,6 +29,10 @@ func main() {
 
 	r := gin.Default()
 	r.Use(middleware.CORS())
+	// 8 req/sec sustained with a burst of 40 — comfortable for normal use by
+	// two people, but stops a runaway script or scraped endpoint from
+	// hammering the API or the Anthropic-backed routes' per-call cost.
+	r.Use(middleware.RateLimit(8, 40))
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -42,6 +46,32 @@ func main() {
 		api.GET("/meals", handlers.GetMeals)
 		api.GET("/meals/usuals", handlers.GetUsuals)
 		api.DELETE("/meals/:id", handlers.DeleteMeal)
+		api.PATCH("/meals/:id/adjust", handlers.AdjustMeal)
+		api.POST("/meals/:id/share", handlers.ShareMeal)
+		api.GET("/meals/:id/photo-url", handlers.GetMealPhotoURL)
+		api.POST("/meals/photo/upload-url", handlers.RequestPhotoUploadURL)
+		api.POST("/meals/photo/analyze", handlers.AnalyzePhoto)
+		api.POST("/weight", handlers.LogWeight)
+		api.GET("/weight/history", handlers.GetWeightHistory)
+		api.GET("/stats/weekly", handlers.GetWeeklyStats)
+		api.POST("/activity", handlers.LogActivity)
+		api.GET("/activity", handlers.GetActivity)
+		api.GET("/partner", handlers.GetPartnerStatus)
+		api.POST("/partner/request", handlers.RequestPartner)
+		api.POST("/partner/accept", handlers.AcceptPartner)
+		api.POST("/partner/decline", handlers.DeclinePartner)
+		api.DELETE("/partner", handlers.DisconnectPartner)
+		api.GET("/barcode/:upc", handlers.GetBarcodeProduct)
+		api.POST("/meals/barcode", handlers.LogBarcodeMeal)
+		api.POST("/recipes", handlers.CreateRecipe)
+		api.GET("/recipes", handlers.GetRecipes)
+		api.PUT("/recipes/:id", handlers.UpdateRecipe)
+		api.DELETE("/recipes/:id", handlers.DeleteRecipe)
+		api.GET("/recipes/shared/:token", handlers.GetSharedRecipe)
+		api.POST("/recipes/shared/:token/accept", handlers.AcceptSharedRecipe)
+		api.POST("/recipes/:id/log", handlers.LogRecipeMeal)
+		api.POST("/coach/checkin", handlers.CreateCheckin)
+		api.GET("/coach/checkin", handlers.GetCheckin)
 	}
 
 	port := os.Getenv("PORT")
@@ -49,7 +79,7 @@ func main() {
 		port = "8080"
 	}
 
-	log.Printf("trellis backend listening on :%s", port)
+	log.Printf("perigee backend listening on :%s", port)
 	if err := r.Run(":" + port); err != nil {
 		log.Fatalf("server failed: %v", err)
 	}

@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/Boro23-wq/trellis/backend/db"
+	"github.com/Boro23-wq/perigee/backend/db"
 )
 
 var validMealTypes = map[string]bool{
@@ -24,20 +24,39 @@ var validSources = map[string]bool{
 	"recipe":  true,
 	"barcode": true,
 	"repeat":  true,
+	"shared":  true,
 }
 
 type Meal struct {
-	ID        string  `json:"id"`
-	Date      string  `json:"date"`
-	MealType  string  `json:"meal_type"`
-	Source    string  `json:"source"`
-	Name      string  `json:"name"`
-	Calories  int     `json:"calories"`
-	Protein   float64 `json:"protein"`
-	Carbs     float64 `json:"carbs"`
-	Fat       float64 `json:"fat"`
-	Notes     *string `json:"notes"`
-	CreatedAt string  `json:"created_at"`
+	ID           string   `json:"id"`
+	Date         string   `json:"date"`
+	MealType     string   `json:"meal_type"`
+	Source       string   `json:"source"`
+	Name         string   `json:"name"`
+	Calories     int      `json:"calories"`
+	Protein      float64  `json:"protein"`
+	Carbs        float64  `json:"carbs"`
+	Fat          float64  `json:"fat"`
+	Notes        *string  `json:"notes"`
+	PhotoPath    *string  `json:"photo_path"`
+	DetectedFood *string  `json:"detected_food"`
+	AIConfidence *string  `json:"ai_confidence"`
+	UserAdjusted bool     `json:"user_adjusted"`
+	ServingGrams *float64 `json:"serving_grams"`
+	CreatedAt    string   `json:"created_at"`
+}
+
+const mealColumns = `id, date, meal_type, source, name, calories, protein, carbs, fat, notes,
+	photo_path, detected_food, ai_confidence, user_adjusted, serving_grams, created_at`
+
+func scanMeal(row interface {
+	Scan(dest ...any) error
+}) (Meal, error) {
+	var m Meal
+	err := row.Scan(&m.ID, &m.Date, &m.MealType, &m.Source, &m.Name, &m.Calories,
+		&m.Protein, &m.Carbs, &m.Fat, &m.Notes,
+		&m.PhotoPath, &m.DetectedFood, &m.AIConfidence, &m.UserAdjusted, &m.ServingGrams, &m.CreatedAt)
+	return m, err
 }
 
 type logMealRequest struct {
@@ -97,20 +116,68 @@ func LogMeal(c *gin.Context) {
 		return
 	}
 
-	var m Meal
-	err = db.Pool.QueryRow(c.Request.Context(),
+	row := db.Pool.QueryRow(c.Request.Context(),
 		`INSERT INTO public.food_logs
 		   (user_id, date, meal_type, source, name, calories, protein, carbs, fat, notes)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		 RETURNING id, date, meal_type, source, name, calories, protein, carbs, fat, notes, created_at`,
+		 RETURNING `+mealColumns,
 		userID, req.Date, req.MealType, req.Source, req.Name, req.Calories,
 		req.Protein, req.Carbs, req.Fat, req.Notes,
-	).Scan(&m.ID, &m.Date, &m.MealType, &m.Source, &m.Name, &m.Calories,
-		&m.Protein, &m.Carbs, &m.Fat, &m.Notes, &m.CreatedAt)
+	)
+	m, err := scanMeal(row)
 
 	if err != nil {
 		log.Printf("LogMeal insert error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to log meal"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, m)
+}
+
+// ShareMeal copies one of the caller's logged meals straight into their
+// active partner's food_logs for the same date/meal type — no recipe object,
+// no accept step, since being partnered is already mutual consent.
+func ShareMeal(c *gin.Context) {
+	userID := c.GetString("user_id")
+	mealID := c.Param("id")
+
+	var partnerID string
+	err := db.Pool.QueryRow(c.Request.Context(),
+		`SELECT CASE WHEN requester_id = $1 THEN addressee_id ELSE requester_id END
+		 FROM public.relationships
+		 WHERE (requester_id = $1 OR addressee_id = $1) AND status = 'active'`,
+		userID,
+	).Scan(&partnerID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no active partner to share with"})
+		return
+	}
+
+	var date, mealType, name string
+	var calories int
+	var protein, carbs, fat float64
+	err = db.Pool.QueryRow(c.Request.Context(),
+		`SELECT date, meal_type, name, calories, protein, carbs, fat
+		 FROM public.food_logs WHERE id = $1 AND user_id = $2`,
+		mealID, userID,
+	).Scan(&date, &mealType, &name, &calories, &protein, &carbs, &fat)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "meal not found"})
+		return
+	}
+
+	row := db.Pool.QueryRow(c.Request.Context(),
+		`INSERT INTO public.food_logs
+		   (user_id, date, meal_type, source, name, calories, protein, carbs, fat)
+		 VALUES ($1, $2, $3, 'shared', $4, $5, $6, $7, $8)
+		 RETURNING `+mealColumns,
+		partnerID, date, mealType, name, calories, protein, carbs, fat,
+	)
+	m, err := scanMeal(row)
+	if err != nil {
+		log.Printf("ShareMeal insert error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to share meal"})
 		return
 	}
 
@@ -135,7 +202,7 @@ func GetMeals(c *gin.Context) {
 	}
 
 	rows, err := db.Pool.Query(c.Request.Context(),
-		`SELECT id, date, meal_type, source, name, calories, protein, carbs, fat, notes, created_at
+		`SELECT `+mealColumns+`
 		 FROM public.food_logs
 		 WHERE user_id = $1 AND date = $2
 		 ORDER BY created_at`,
@@ -150,9 +217,8 @@ func GetMeals(c *gin.Context) {
 	meals := []Meal{}
 	totals := dayTotals{}
 	for rows.Next() {
-		var m Meal
-		if err := rows.Scan(&m.ID, &m.Date, &m.MealType, &m.Source, &m.Name, &m.Calories,
-			&m.Protein, &m.Carbs, &m.Fat, &m.Notes, &m.CreatedAt); err != nil {
+		m, err := scanMeal(rows)
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read meals"})
 			return
 		}

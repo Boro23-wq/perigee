@@ -1,4 +1,4 @@
-# Trellis frontend
+# Perigee frontend
 
 Next.js (App Router) + Supabase Auth (`@supabase/ssr`, httpOnly cookie sessions).
 

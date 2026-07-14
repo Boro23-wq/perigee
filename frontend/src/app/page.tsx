@@ -14,36 +14,45 @@ export default async function Home() {
   }
 
   return (
-    <div className="flex min-h-full flex-col">
-      <header className="flex items-center justify-between px-6 py-5 sm:px-10">
+    <div className="relative flex min-h-full flex-col overflow-hidden">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-[-260px] h-[260px] w-[260px] -translate-x-1/2 rounded-full opacity-[0.08] blur-[80px] sm:h-[340px] sm:w-[340px]"
+        style={{ background: "var(--accent)" }}
+      />
+
+      <header className="relative flex items-center justify-between border-b border-border px-6 py-4 sm:px-8">
         <Logo />
         <Link
           href="/login"
-          className="text-sm text-muted hover:text-foreground transition-colors"
+          className="text-[13px] text-muted transition-colors hover:text-foreground"
         >
           Log in
         </Link>
       </header>
 
-      <main className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-        <h1 className="max-w-md text-4xl font-semibold tracking-tight sm:text-5xl">
-          Track together.{" "}
+      <main className="relative flex flex-1 flex-col items-center justify-center px-6 text-center">
+        <span className="label-xs rounded-md border border-border bg-surface px-2 py-1">
+          Calorie tracking
+        </span>
+        <h1 className="mt-5 max-w-md text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
+          Track your progress.{" "}
           <span className="text-accent">Stay consistent.</span>
         </h1>
-        <p className="mt-4 max-w-sm text-balance text-muted">
-          Calorie tracking built for two — weekly deficit, weight trends, and
-          a shared recipe box.
+        <p className="mt-3 max-w-xs text-sm text-balance text-muted">
+          Weekly deficit, weight trends, and a recipe box — with optional
+          sharing if you&apos;ve got a partner.
         </p>
-        <div className="mt-8 flex gap-3">
+        <div className="mt-7 flex gap-2">
           <Link
             href="/signup"
-            className="rounded-full bg-accent px-6 py-3 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
+            className="rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground shadow-soft transition-opacity hover:opacity-90"
           >
             Get started
           </Link>
           <Link
             href="/login"
-            className="rounded-full border border-border px-6 py-3 text-sm font-medium transition-colors hover:bg-surface"
+            className="rounded-lg border border-border bg-surface px-4 py-2 text-[13px] font-medium transition-colors hover:border-accent"
           >
             Log in
           </Link>

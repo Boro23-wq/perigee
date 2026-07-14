@@ -1,4 +1,4 @@
-# Trellis 🌱 — Calorie Tracking App
+# Perigee 🛰️ — Calorie Tracking App
 
 ## Stack
 - Frontend: Next.js on Vercel — [`/frontend`](frontend/README.md)

@@ -1,5 +1,5 @@
 -- ============================================================
--- TRELLIS SCHEMA v2 — initial migration
+-- PERIGEE SCHEMA v2 — initial migration
 -- Source of truth: TRELLIS_Spec_v2_Corrected.md (Part 1.1 + 2.5)
 -- Run this in the Supabase SQL Editor (or via supabase db push).
 -- ============================================================
@@ -83,7 +83,7 @@ CREATE TABLE public.food_logs (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   date DATE NOT NULL,
   meal_type TEXT NOT NULL CHECK (meal_type IN ('breakfast','lunch','dinner','snack','drink')),
-  source TEXT NOT NULL CHECK (source IN ('manual','photo','recipe','barcode','repeat')),
+  source TEXT NOT NULL CHECK (source IN ('manual','photo','recipe','barcode','repeat','shared')),
   recipe_id UUID REFERENCES public.recipes(id) ON DELETE SET NULL,
   photo_path TEXT,             -- Supabase Storage path, not URL
   detected_food TEXT,
