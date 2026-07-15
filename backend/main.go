@@ -42,6 +42,7 @@ func main() {
 	api.Use(middleware.AuthRequired())
 	{
 		api.GET("/me", handlers.GetMe)
+		api.PATCH("/me", handlers.UpdateProfile)
 		api.POST("/meals", handlers.LogMeal)
 		api.GET("/meals", handlers.GetMeals)
 		api.GET("/meals/usuals", handlers.GetUsuals)
@@ -53,6 +54,7 @@ func main() {
 		api.POST("/meals/photo/analyze", handlers.AnalyzePhoto)
 		api.POST("/weight", handlers.LogWeight)
 		api.GET("/weight/history", handlers.GetWeightHistory)
+		api.DELETE("/weight/:date", handlers.DeleteWeight)
 		api.GET("/stats/weekly", handlers.GetWeeklyStats)
 		api.POST("/activity", handlers.LogActivity)
 		api.GET("/activity", handlers.GetActivity)

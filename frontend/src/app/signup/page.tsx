@@ -90,7 +90,9 @@ export default function SignupPage() {
 
       <div className="relative w-full max-w-90">
         <div className="flex flex-col items-center">
-          <PerigeeMark className="h-12 w-auto" />
+          <Link href="/" aria-label="Perigee home">
+            <PerigeeMark className="h-12 w-auto" />
+          </Link>
           <h1 className="mt-5 text-2xl font-semibold tracking-tight">
             Create your account
           </h1>

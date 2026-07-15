@@ -179,7 +179,7 @@ export default function LogPage() {
         });
         setPhotoResult(updated);
       } catch {
-        // slider stays interactive either way — user can nudge again
+        // slider stays interactive either way, user can nudge again
       }
     }, 400);
   }
@@ -330,7 +330,7 @@ export default function LogPage() {
                   className="mt-3 w-full accent-accent"
                 />
                 <p className="mt-2 text-xs text-muted">
-                  Estimate — restaurant meals often have hidden oils/butter. Nudge up if
+                  Estimate: restaurant meals often have hidden oils/butter. Nudge up if
                   it was rich.
                 </p>
                 <button
@@ -391,7 +391,7 @@ export default function LogPage() {
                       inputMode="numeric"
                       value={gramsInput}
                       onChange={(e) => setGramsInput(e.target.value)}
-                      placeholder="No serving size on file — enter grams"
+                      placeholder="No serving size on file, enter grams"
                       className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
                     />
                   </div>

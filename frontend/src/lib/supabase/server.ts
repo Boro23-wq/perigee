@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 // Server Components / Route Handlers use this. Cookie writes are silently
-// ignored when called from a Server Component (no response to attach to) —
+// ignored when called from a Server Component (no response to attach to);
 // session refresh there is handled by proxy.ts instead.
 export async function createClient() {
   const cookieStore = await cookies();
@@ -21,7 +21,7 @@ export async function createClient() {
               cookieStore.set(name, value, options)
             );
           } catch {
-            // called from a Server Component — proxy.ts refreshes sessions
+            // called from a Server Component; proxy.ts refreshes sessions
           }
         },
       },

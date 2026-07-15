@@ -33,6 +33,10 @@ export default function WeightPage() {
   const [weight, setWeight] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const [editingDate, setEditingDate] = useState<string | null>(null);
+  const [editingWeight, setEditingWeight] = useState("");
+  const [rowBusy, setRowBusy] = useState<string | null>(null);
+
   const load = useCallback(async (r: string) => {
     try {
       const data = await api.get(`/api/weight/history?range=${r}`);
@@ -77,6 +81,44 @@ export default function WeightPage() {
       setError(err instanceof Error ? err.message : "Failed to log weight");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  function startEdit(entry: WeightEntry) {
+    setEditingDate(entry.date);
+    setEditingWeight(String(entry.weight_lbs));
+  }
+
+  async function saveEdit(date: string) {
+    if (!editingWeight) return;
+    setRowBusy(date);
+    setError("");
+
+    try {
+      await api.post("/api/weight", {
+        date,
+        weight_lbs: Number(editingWeight),
+      });
+      setEditingDate(null);
+      await load(range);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update weigh-in");
+    } finally {
+      setRowBusy(null);
+    }
+  }
+
+  async function deleteEntry(date: string) {
+    setRowBusy(date);
+    setError("");
+
+    try {
+      await api.delete(`/api/weight/${date}`);
+      await load(range);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete weigh-in");
+    } finally {
+      setRowBusy(null);
     }
   }
 
@@ -144,7 +186,7 @@ export default function WeightPage() {
             <h2 className="label-xs">Trend</h2>
             <p className="mt-1 max-w-md text-[13px] text-muted">
               Daily weigh-ins (dots) with a smoothed trend line. Your weight
-              swings a few pounds a day from water and food, not fat — the
+              swings a few pounds a day from water and food, not fat. The
               trend line is what actually matters.
             </p>
           </div>
@@ -206,6 +248,85 @@ export default function WeightPage() {
               {submitting ? "Saving…" : "Log"}
             </button>
           </form>
+        </section>
+
+        <section className="mt-7">
+          <h2 className="label-xs">Recent entries</h2>
+          {!entries ? (
+            <div className="mt-3 flex flex-col gap-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          ) : entries.length === 0 ? (
+            <p className="mt-3 text-[13px] text-muted">No weigh-ins yet.</p>
+          ) : (
+            <div className="mt-3 flex flex-col divide-y divide-border rounded-xl border border-border bg-surface">
+              {[...entries]
+                .reverse()
+                .slice(0, 14)
+                .map((entry) => (
+                  <div
+                    key={entry.date}
+                    className="flex items-center justify-between gap-3 px-4 py-2.5"
+                  >
+                    <span className="text-[13px] text-muted">
+                      {new Date(entry.date + "T00:00:00").toLocaleDateString(
+                        undefined,
+                        { month: "short", day: "numeric", year: "numeric" },
+                      )}
+                    </span>
+
+                    {editingDate === entry.date ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          step="0.1"
+                          min={0}
+                          max={1499}
+                          autoFocus
+                          value={editingWeight}
+                          onChange={(e) => setEditingWeight(e.target.value)}
+                          className="w-20 rounded-lg border border-border bg-surface-2 px-2 py-1 text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                        />
+                        <button
+                          onClick={() => saveEdit(entry.date)}
+                          disabled={rowBusy === entry.date}
+                          className="text-[13px] font-medium text-accent hover:opacity-90 disabled:opacity-50"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditingDate(null)}
+                          className="text-[13px] text-muted hover:text-foreground"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <span className="text-[13px] font-medium tabular-nums text-foreground">
+                          {entry.weight_lbs.toFixed(1)} lbs
+                        </span>
+                        <button
+                          onClick={() => startEdit(entry)}
+                          className="text-[13px] text-muted hover:text-foreground"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => deleteEntry(entry.date)}
+                          disabled={rowBusy === entry.date}
+                          className="text-[13px] text-danger hover:opacity-90 disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+            </div>
+          )}
         </section>
       </main>
     </div>

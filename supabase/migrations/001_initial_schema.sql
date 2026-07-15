@@ -13,6 +13,8 @@ CREATE TABLE public.profiles (
   week_start_day SMALLINT NOT NULL DEFAULT 0,  -- 0=Sunday, 1=Monday
   weight_goal_lbs NUMERIC(5,1),
   goal_date DATE,
+  height_in NUMERIC(5,1),
+  onboarded_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

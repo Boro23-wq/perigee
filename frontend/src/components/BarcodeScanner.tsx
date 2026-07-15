@@ -11,8 +11,8 @@ type Props = {
 };
 
 // Uses @zxing/browser (canvas + getUserMedia) rather than the native
-// BarcodeDetector API — BarcodeDetector isn't implemented in Safari, and
-// this app is used from an iPhone.
+// BarcodeDetector API, since BarcodeDetector isn't implemented in Safari,
+// and this app is used from an iPhone.
 export function BarcodeScanner({ onDetected, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState("");
@@ -35,7 +35,7 @@ export function BarcodeScanner({ onDetected, onClose }: Props) {
         setError(
           err instanceof Error
             ? err.message
-            : "Couldn't access the camera — check permissions."
+            : "Couldn't access the camera. Check permissions."
         );
       });
 

@@ -181,7 +181,7 @@ export default function RecipesPage() {
           <h2 className="label-xs">My recipes</h2>
           {recipes && recipes.length === 0 && (
             <p className="mt-3 rounded-xl border border-dashed border-border p-5 text-center text-[13px] text-muted">
-              No recipes yet — build one below, or accept a share link from your partner.
+              No recipes yet. Build one below, or accept a share link from your partner.
             </p>
           )}
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">

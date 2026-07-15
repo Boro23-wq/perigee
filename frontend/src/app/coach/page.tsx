@@ -75,7 +75,7 @@ export default function CoachPage() {
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-6 pb-6 pt-6 sm:px-8">
         <h1 className="text-xl font-semibold tracking-tight">Coach</h1>
         <p className="mt-1 text-[13px] text-muted">
-          Grounded in your real numbers — weight trend, calorie budget, and goal. Advisory
+          Grounded in your real numbers: weight trend, calorie budget, and goal. Advisory
           only: it can&apos;t change settings or log anything for you.
         </p>
 
@@ -91,7 +91,7 @@ export default function CoachPage() {
             {messages && messages.length === 0 && (
               <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
                 <p className="text-[13px] text-muted">
-                  Ask about your trend, a timeline, or a goal — the coach will do the
+                  Ask about your trend, a timeline, or a goal, and the coach will do the
                   actual math against your real data.
                 </p>
                 <div className="flex flex-col gap-2">

@@ -1,7 +1,7 @@
 import { type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
-// Next.js 16 renamed "middleware" to "proxy" — same mechanism, new name.
+// Next.js 16 renamed "middleware" to "proxy". Same mechanism, new name.
 export function proxy(request: NextRequest) {
   return updateSession(request);
 }

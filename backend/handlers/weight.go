@@ -66,6 +66,33 @@ func LogWeight(c *gin.Context) {
 	c.JSON(http.StatusCreated, entry)
 }
 
+// DeleteWeight removes a single day's weigh-in, identified by date.
+func DeleteWeight(c *gin.Context) {
+	userID := c.GetString("user_id")
+	date := c.Param("date")
+
+	if _, err := time.Parse("2006-01-02", date); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "date must be YYYY-MM-DD"})
+		return
+	}
+
+	tag, err := db.Pool.Exec(c.Request.Context(),
+		`DELETE FROM public.weight_logs WHERE user_id = $1 AND date = $2`,
+		userID, date,
+	)
+	if err != nil {
+		log.Printf("DeleteWeight error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete weigh-in"})
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no weigh-in found for that date"})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
 type weightSummary struct {
 	StartWeight     *float64 `json:"start_weight"`
 	CurrentWeight   *float64 `json:"current_weight"`

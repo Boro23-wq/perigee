@@ -16,19 +16,34 @@ curl localhost:8080/api/me                               # -> 401, no token
 curl localhost:8080/api/me -H "Authorization: Bearer <access_token>"
 ```
 
-## Deploy (Fly.io)
+## Deploy (Cloud Run)
+
+Deploys from source — Cloud Run builds `Dockerfile` via Cloud Build, no local
+Docker build/push needed. Project: `portfolio-303809`, region:
+`northamerica-northeast1` (closest to the Supabase `ca-central-1` pooler).
 
 ```bash
-fly deploy --app trellis-api-boro23
+gcloud run deploy perigee-api \
+  --source . \
+  --project=portfolio-303809 \
+  --region=northamerica-northeast1 \
+  --platform=managed \
+  --allow-unauthenticated \
+  --memory=256Mi --cpu=1 \
+  --min-instances=0 --max-instances=3
 ```
 
-Secrets are set with `fly secrets import` (reads `NAME=VALUE` from stdin, avoids
-shell-escaping issues with special characters in the DB password):
+Env vars (`DATABASE_URL`, `SUPABASE_JWT_SECRET`, `SUPABASE_URL`, `FRONTEND_ORIGIN`,
+`SUPABASE_SERVICE_ROLE_KEY`, `MEAL_PHOTOS_BUCKET`, `ANTHROPIC_API_KEY`,
+`ANTHROPIC_MODEL`) are set via `--env-vars-file` (a YAML of `KEY: value` built
+from `.env`) or updated afterward with:
 
 ```bash
-grep -E '^(DATABASE_URL|SUPABASE_JWT_SECRET|SUPABASE_URL|FRONTEND_ORIGIN|SUPABASE_SERVICE_ROLE_KEY|MEAL_PHOTOS_BUCKET|ANTHROPIC_API_KEY|ANTHROPIC_MODEL)=' .env \
-  | fly secrets import --app trellis-api-boro23
+gcloud run services update perigee-api --region=northamerica-northeast1 \
+  --update-env-vars=KEY=value
 ```
+
+`PORT` is injected automatically by Cloud Run — don't set it manually.
 
 ## Notes
 

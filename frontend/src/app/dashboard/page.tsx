@@ -161,6 +161,12 @@ export default function DashboardPage() {
       setEmail(user.email ?? null);
 
       try {
+        const me = await api.get("/api/me");
+        if (!me.onboarded) {
+          router.replace("/onboarding");
+          return;
+        }
+
         await Promise.all([
           loadMeals(),
           loadStats(),
@@ -178,7 +184,7 @@ export default function DashboardPage() {
     load();
   }, [router, loadMeals, loadStats, loadActivity, loadPartner, loadCheckin]);
 
-  // First time a shared meal from a partner shows up, flag it — a one-time
+  // First time a shared meal from a partner shows up, flag it: a one-time
   // highlight + banner, tracked in localStorage so it never repeats.
   useEffect(() => {
     if (sharedCheckDone.current || !meals || !partner) return;
@@ -337,6 +343,12 @@ export default function DashboardPage() {
               className="text-[13px] text-muted hover:text-foreground transition-colors"
             >
               Partner
+            </Link>
+            <Link
+              href="/profile"
+              className="text-[13px] text-muted hover:text-foreground transition-colors"
+            >
+              Profile
             </Link>
             <button
               onClick={handleLogout}
