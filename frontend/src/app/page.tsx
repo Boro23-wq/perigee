@@ -14,7 +14,7 @@ export default async function Home() {
   }
 
   return (
-    <div className="relative flex min-h-full flex-col overflow-hidden">
+    <div className="relative flex min-h-screen flex-col overflow-hidden">
       <div
         aria-hidden
         className="pointer-events-none absolute left-1/2 top-[-260px] h-[260px] w-[260px] -translate-x-1/2 rounded-full opacity-[0.08] blur-[80px] sm:h-[340px] sm:w-[340px]"

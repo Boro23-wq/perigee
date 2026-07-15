@@ -48,7 +48,7 @@ export default function SharedRecipePage() {
   }
 
   return (
-    <div className="flex min-h-full flex-col items-center justify-center px-6">
+    <div className="flex min-h-screen flex-col items-center justify-center px-6">
       <Logo className="mb-6" />
 
       {error && <p className="text-[13px] text-danger">{error}</p>}
