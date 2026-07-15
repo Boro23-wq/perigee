@@ -62,7 +62,7 @@ export default function LoginPage() {
 
       <div className="relative w-full max-w-90">
         <div className="flex flex-col items-center">
-          <PerigeeMark className="h-12 w-auto" style={{ aspectRatio: "100 / 120" }} />
+          <PerigeeMark className="h-12 w-auto" />
           <h1 className="mt-5 text-2xl font-semibold tracking-tight">
             Sign in to Perigee
           </h1>

@@ -58,7 +58,7 @@ export default function SignupPage() {
       <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-background px-6 py-12 text-center">
         <AuthBackdrop />
         <div className="relative flex flex-col items-center">
-          <PerigeeMark className="h-12 w-auto" style={{ aspectRatio: "100 / 120" }} />
+          <PerigeeMark className="h-12 w-auto" />
           <h1 className="mt-5 text-2xl font-semibold tracking-tight">
             Check your email
           </h1>
@@ -90,7 +90,7 @@ export default function SignupPage() {
 
       <div className="relative w-full max-w-90">
         <div className="flex flex-col items-center">
-          <PerigeeMark className="h-12 w-auto" style={{ aspectRatio: "100 / 120" }} />
+          <PerigeeMark className="h-12 w-auto" />
           <h1 className="mt-5 text-2xl font-semibold tracking-tight">
             Create your account
           </h1>
