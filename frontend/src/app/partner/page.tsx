@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { Flame } from "lucide-react";
+import { Flame, Hand } from "lucide-react";
 import { api } from "@/lib/api";
+import { timeAgo } from "@/lib/date";
 import { AppHeader } from "@/components/AppHeader";
 import { Skeleton } from "@/components/Skeleton";
 
@@ -28,6 +29,12 @@ type Comparison = {
   partner: ComparisonSide;
 };
 
+type RecentPoke = {
+  id: string;
+  sender_id: string;
+  created_at: string;
+};
+
 export default function PartnerPage() {
   const [status, setStatus] = useState<PartnerStatus | null>(null);
   const [email, setEmail] = useState("");
@@ -37,6 +44,7 @@ export default function PartnerPage() {
   const [poking, setPoking] = useState(false);
   const [pokedToday, setPokedToday] = useState(false);
   const [pokeBanner, setPokeBanner] = useState<string | null>(null);
+  const [recentPokes, setRecentPokes] = useState<RecentPoke[]>([]);
 
   async function load() {
     const data = await api.get("/api/partner");
@@ -51,6 +59,8 @@ export default function PartnerPage() {
         if (data.status === "active") {
           const cmp = await api.get("/api/partner/comparison");
           setComparison(cmp);
+          const pokes = await api.get("/api/partner/pokes/recent");
+          setRecentPokes(pokes.pokes);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load");
@@ -257,6 +267,21 @@ export default function PartnerPage() {
             >
               {pokedToday ? "Poked today ✓" : poking ? "Poking…" : `Poke ${partnerName}`}
             </button>
+          </div>
+        )}
+
+        {status?.status === "active" && recentPokes.length > 0 && (
+          <div className="mt-3 rounded-xl border border-border bg-surface p-5 shadow-soft">
+            <p className="label-xs">Recent pokes</p>
+            <div className="mt-3 flex flex-col gap-2">
+              {recentPokes.map((p) => (
+                <div key={p.id} className="flex items-center gap-2 text-[13px]">
+                  <Hand size={14} className="text-accent" />
+                  <span>{partnerName} poked you</span>
+                  <span className="text-xs text-muted">{timeAgo(p.created_at)}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </main>

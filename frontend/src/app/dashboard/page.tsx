@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Flame, MoreVertical } from "lucide-react";
+import { ArrowRight, Flame, MoreVertical, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { api } from "@/lib/api";
 import { localDateString } from "@/lib/date";
@@ -44,6 +44,7 @@ type Meal = {
   fat: number;
   fiber: number;
   notes: string | null;
+  photo_path: string | null;
   ai_confidence: "low" | "medium" | "high" | null;
   created_at: string;
 };
@@ -196,6 +197,8 @@ export default function DashboardPage() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [newSharedIds, setNewSharedIds] = useState<Set<string>>(new Set());
   const [banner, setBanner] = useState<string | null>(null);
+  const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
+  const [loadingPhotoId, setLoadingPhotoId] = useState<string | null>(null);
   const sharedCheckDone = useRef(false);
 
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
@@ -390,6 +393,19 @@ export default function DashboardPage() {
       setError(err instanceof Error ? err.message : "Failed to log activity");
     } finally {
       setActivitySubmitting(false);
+    }
+  }
+
+  async function viewPhoto(id: string) {
+    setOpenMenuId(null);
+    setLoadingPhotoId(id);
+    try {
+      const { url } = await api.get(`/api/meals/${id}/photo-url`);
+      setViewingPhotoUrl(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load photo");
+    } finally {
+      setLoadingPhotoId(null);
     }
   }
 
@@ -1050,6 +1066,15 @@ export default function DashboardPage() {
                           onClick={() => setOpenMenuId(null)}
                         />
                         <div className="absolute right-4 top-11 z-20 w-52 overflow-hidden rounded-lg border border-border bg-surface shadow-soft">
+                          {m.photo_path && (
+                            <button
+                              onClick={() => viewPhoto(m.id)}
+                              disabled={loadingPhotoId === m.id}
+                              className="flex w-full items-center px-3 py-2 text-left text-[13px] text-muted transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-60"
+                            >
+                              {loadingPhotoId === m.id ? "Loading…" : "View photo"}
+                            </button>
+                          )}
                           <button
                             onClick={() => startEdit(m)}
                             className="flex w-full items-center px-3 py-2 text-left text-[13px] text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
@@ -1087,6 +1112,27 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2 rounded-lg bg-accent-soft px-4 py-2.5 text-[13px] text-accent shadow-lg">
             🎉 {banner}
           </div>
+        </div>
+      )}
+
+      {viewingPhotoUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6"
+          onClick={() => setViewingPhotoUrl(null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={viewingPhotoUrl}
+            alt="Logged meal"
+            className="max-h-full max-w-full rounded-xl object-contain"
+          />
+          <button
+            onClick={() => setViewingPhotoUrl(null)}
+            aria-label="Close photo"
+            className="absolute right-6 top-6 rounded-full bg-white/10 p-1.5 text-white transition-colors hover:bg-white/20"
+          >
+            <X size={18} />
+          </button>
         </div>
       )}
     </div>
