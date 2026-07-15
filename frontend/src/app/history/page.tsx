@@ -65,7 +65,6 @@ export default function HistoryPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
   const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
-  const [loadingPhotoId, setLoadingPhotoId] = useState<string | null>(null);
   const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
 
   const loadPage = useCallback(async (before: string | null) => {
@@ -167,19 +166,6 @@ export default function HistoryPage() {
       setEditError(err instanceof Error ? err.message : "Failed to save changes");
     } finally {
       setEditSaving(false);
-    }
-  }
-
-  async function viewPhoto(id: string) {
-    setOpenMenuId(null);
-    setLoadingPhotoId(id);
-    try {
-      const { url } = await api.get(`/api/meals/${id}/photo-url`);
-      setViewingPhotoUrl(url);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load photo");
-    } finally {
-      setLoadingPhotoId(null);
     }
   }
 
@@ -330,14 +316,20 @@ export default function HistoryPage() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           {m.photo_path && (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={thumbUrls[m.id]}
-                              alt=""
-                              className={`h-10 w-10 shrink-0 rounded-lg object-cover ${
+                            <button
+                              onClick={() => thumbUrls[m.id] && setViewingPhotoUrl(thumbUrls[m.id])}
+                              aria-label={`View photo for ${m.name}`}
+                              className={`h-10 w-10 shrink-0 overflow-hidden rounded-lg ${
                                 thumbUrls[m.id] ? "bg-surface-2" : "invisible"
                               }`}
-                            />
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={thumbUrls[m.id]}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                            </button>
                           )}
                           <div>
                             <p className="text-[13px] font-medium">{m.name}</p>
@@ -363,15 +355,6 @@ export default function HistoryPage() {
                               onClick={() => setOpenMenuId(null)}
                             />
                             <div className="absolute right-4 top-11 z-20 w-40 overflow-hidden rounded-lg border border-border bg-surface shadow-soft">
-                              {m.photo_path && (
-                                <button
-                                  onClick={() => viewPhoto(m.id)}
-                                  disabled={loadingPhotoId === m.id}
-                                  className="flex w-full items-center px-3 py-2 text-left text-[13px] text-muted transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-60"
-                                >
-                                  {loadingPhotoId === m.id ? "Loading…" : "View photo"}
-                                </button>
-                              )}
                               <button
                                 onClick={() => startEdit(m)}
                                 className="flex w-full items-center px-3 py-2 text-left text-[13px] text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
