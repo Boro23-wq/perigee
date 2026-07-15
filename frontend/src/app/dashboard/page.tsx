@@ -716,26 +716,28 @@ export default function DashboardPage() {
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:grid-rows-2">
           <div className="flex flex-col rounded-xl border border-border bg-surface p-5 shadow-soft sm:col-start-1 sm:row-start-1">
             <p className="label-xs">Streak</p>
-            <div className="mt-1 flex items-center gap-1.5">
-              <Flame
-                size={18}
-                className={
-                  streak && streak.current_streak > 0
-                    ? "text-accent"
-                    : "text-muted"
-                }
-              />
-              <p className="text-base font-semibold tracking-tight">
+            <div className="mt-1 flex items-center justify-between gap-1.5">
+              <div className="flex items-center gap-1.5">
+                <Flame
+                  size={18}
+                  className={
+                    streak && streak.current_streak > 0
+                      ? "text-accent"
+                      : "text-muted"
+                  }
+                />
+                <p className="text-base font-semibold tracking-tight">
+                  {streak
+                    ? `${streak.current_streak} day${streak.current_streak === 1 ? "" : "s"}`
+                    : "—"}
+                </p>
+              </div>
+              <p className="text-xs text-muted">
                 {streak
-                  ? `${streak.current_streak} day${streak.current_streak === 1 ? "" : "s"}`
-                  : "—"}
+                  ? `Longest: ${streak.longest_streak}${streak.logged_today ? "" : " · not logged today yet"}`
+                  : "Log a meal and your weight to start a streak"}
               </p>
             </div>
-            <p className="mt-1 text-xs text-muted">
-              {streak
-                ? `Longest: ${streak.longest_streak}${streak.logged_today ? "" : " · not logged today yet"}`
-                : "Log a meal and your weight to start a streak"}
-            </p>
             <div className="mt-auto flex items-center gap-1.5 pt-3">
               {(streak?.last_7_days ?? Array(7).fill(false)).map(
                 (logged, i) => (

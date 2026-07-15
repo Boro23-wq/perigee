@@ -42,8 +42,8 @@ export default function FeedbackPage() {
       <main className="mx-auto w-full max-w-2xl flex-1 px-6 pb-20 pt-6 sm:px-8">
         <h1 className="text-xl font-semibold tracking-tight">Feedback</h1>
         <p className="mt-1.5 text-[13px] text-muted">
-          Found a bug or have an idea? Send it straight through — no forms,
-          no tickets.
+          Found a bug or have an idea or a feature request? Send it straight
+          through.
         </p>
 
         <form
