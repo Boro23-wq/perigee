@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -137,4 +139,168 @@ func GetCheckin(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, checkinResponse{Date: dateParam, Mood: mood, CoachResponse: response})
+}
+
+const maxChatHistory = 20 // bound context size/cost per turn
+
+type chatMessageRequest struct {
+	Content string `json:"content"`
+}
+
+type chatMessageRecord struct {
+	Role      string `json:"role"`
+	Content   string `json:"content"`
+	CreatedAt string `json:"created_at"`
+}
+
+// GetChatMessages returns the full coach conversation so far, oldest first.
+func GetChatMessages(c *gin.Context) {
+	userID := c.GetString("user_id")
+
+	rows, err := db.Pool.Query(c.Request.Context(),
+		`SELECT role, content, created_at FROM public.coach_messages
+		 WHERE user_id = $1 ORDER BY created_at`,
+		userID,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load messages"})
+		return
+	}
+	defer rows.Close()
+
+	messages := []chatMessageRecord{}
+	for rows.Next() {
+		var m chatMessageRecord
+		if err := rows.Scan(&m.Role, &m.Content, &m.CreatedAt); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read messages"})
+			return
+		}
+		messages = append(messages, m)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"messages": messages})
+}
+
+// PostChatMessage appends the user's message, asks Claude for a reply
+// grounded in their real current stats (advisory only — the coach can't
+// change settings or log anything), and stores both turns.
+func PostChatMessage(c *gin.Context) {
+	userID := c.GetString("user_id")
+
+	var req chatMessageRequest
+	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Content) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "content is required"})
+		return
+	}
+	if len(req.Content) > 2000 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "message is too long"})
+		return
+	}
+
+	if _, err := db.Pool.Exec(c.Request.Context(),
+		`INSERT INTO public.coach_messages (user_id, role, content) VALUES ($1, 'user', $2)`,
+		userID, req.Content,
+	); err != nil {
+		log.Printf("PostChatMessage insert user error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save message"})
+		return
+	}
+
+	rows, err := db.Pool.Query(c.Request.Context(),
+		`SELECT role, content FROM public.coach_messages
+		 WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2`,
+		userID, maxChatHistory,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load conversation"})
+		return
+	}
+	var history []coach.ChatMessage
+	for rows.Next() {
+		var m coach.ChatMessage
+		if err := rows.Scan(&m.Role, &m.Content); err != nil {
+			rows.Close()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read conversation"})
+			return
+		}
+		history = append([]coach.ChatMessage{m}, history...) // DESC rows, restore ascending order
+	}
+	rows.Close()
+
+	contextSnapshot, err := buildChatContext(c.Request.Context(), userID)
+	if err != nil {
+		log.Printf("buildChatContext error: %v", err)
+		contextSnapshot = "{}"
+	}
+
+	reply, err := coach.Chat(history, contextSnapshot)
+	if err != nil {
+		log.Printf("coach.Chat error: %v", err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": "coach is unavailable right now"})
+		return
+	}
+
+	if _, err := db.Pool.Exec(c.Request.Context(),
+		`INSERT INTO public.coach_messages (user_id, role, content) VALUES ($1, 'assistant', $2)`,
+		userID, reply,
+	); err != nil {
+		log.Printf("PostChatMessage insert assistant error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save reply"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"role": "assistant", "content": reply})
+}
+
+type chatContext struct {
+	Today                   string   `json:"today"`
+	CurrentWeightLbs        *float64 `json:"current_weight_lbs,omitempty"`
+	WeightTrendPerWeek      *float64 `json:"weight_trend_lbs_per_week,omitempty"`
+	GoalWeightLbs           *float64 `json:"goal_weight_lbs,omitempty"`
+	GoalDate                *string  `json:"goal_date,omitempty"`
+	DailyCalorieBudget      int      `json:"daily_calorie_budget"`
+	RemainingPerDayThisWeek float64  `json:"remaining_cal_per_day_this_week"`
+	BankingCal              int      `json:"banking_cal"`
+}
+
+// buildChatContext assembles the real-numbers snapshot the chat is grounded
+// in — same philosophy as the daily check-in's Snapshot, just reused here.
+func buildChatContext(ctx context.Context, userID string) (string, error) {
+	stats, err := computeWeeklyStats(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+
+	var goalWeightLbs *float64
+	var goalDate *string
+	var timezone string
+	if err := db.Pool.QueryRow(ctx,
+		`SELECT weight_goal_lbs, goal_date, timezone FROM public.profiles WHERE id = $1`, userID,
+	).Scan(&goalWeightLbs, &goalDate, &timezone); err != nil {
+		return "", err
+	}
+
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		loc = time.UTC
+	}
+
+	cc := chatContext{
+		Today:                   time.Now().In(loc).Format("2006-01-02"),
+		GoalWeightLbs:           goalWeightLbs,
+		GoalDate:                goalDate,
+		DailyCalorieBudget:      stats.DailyCalorieBudget,
+		RemainingPerDayThisWeek: stats.RemainingPerDay,
+		BankingCal:              stats.Banking,
+	}
+	if stats.WeightTrend != nil {
+		cc.CurrentWeightLbs = stats.WeightTrend.CurrentWeight
+		cc.WeightTrendPerWeek = stats.WeightTrend.TrendLbsPerWeek
+	}
+
+	b, err := json.Marshal(cc)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }

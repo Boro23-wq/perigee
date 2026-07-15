@@ -88,66 +88,85 @@ func parseRange(raw string) int {
 	return days
 }
 
-// loadWeightEntries fetches weigh-ins from the last N days plus a 7-day
-// rolling average (calendar-based, so gaps in logging don't skew it).
-func loadWeightEntries(ctx context.Context, userID string, days int) ([]WeightEntry, error) {
+// loadWeightEntries fetches the user's ENTIRE weigh-in history and runs the
+// Kalman filter across all of it — the trend estimate needs the full
+// history to converge properly and shouldn't be blind-restarted at whatever
+// date happens to sit at the edge of a display window. Only entries within
+// the last `days` are returned for display; the trend returned alongside
+// them reflects the filter's full-history state, not just the window.
+func loadWeightEntries(ctx context.Context, userID string, days int) ([]WeightEntry, float64, error) {
 	rows, err := db.Pool.Query(ctx,
-		`SELECT date, weight_lbs, note,
-		        AVG(weight_lbs) OVER (
-		          ORDER BY date
-		          RANGE BETWEEN '6 days' PRECEDING AND CURRENT ROW
-		        ) AS rolling_avg
+		`SELECT date, weight_lbs, note
 		 FROM public.weight_logs
-		 WHERE user_id = $1 AND date > CURRENT_DATE - ($2 || ' days')::interval
+		 WHERE user_id = $1
 		 ORDER BY date`,
-		userID, days,
+		userID,
 	)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
-	entries := []WeightEntry{}
+	var dates []time.Time
+	all := []WeightEntry{}
 	for rows.Next() {
 		var e WeightEntry
-		if err := rows.Scan(&e.Date, &e.WeightLbs, &e.Note, &e.RollingAvg); err != nil {
-			return nil, err
+		var dateStr string
+		if err := rows.Scan(&dateStr, &e.WeightLbs, &e.Note); err != nil {
+			return nil, 0, err
 		}
-		entries = append(entries, e)
+		parsed, perr := time.Parse("2006-01-02", dateStr)
+		if perr != nil {
+			continue
+		}
+		e.Date = dateStr
+		dates = append(dates, parsed)
+		all = append(all, e)
 	}
-	return entries, nil
+
+	weights := make([]float64, len(all))
+	for i, e := range all {
+		weights[i] = e.WeightLbs
+	}
+	smoothed, trendPerWeek := kalmanWeightFilter(dates, weights)
+	for i := range all {
+		all[i].RollingAvg = smoothed[i]
+	}
+
+	cutoff := time.Now().AddDate(0, 0, -days)
+	windowed := []WeightEntry{}
+	for i, d := range dates {
+		if d.After(cutoff) {
+			windowed = append(windowed, all[i])
+		}
+	}
+
+	return windowed, trendPerWeek, nil
 }
 
-// computeWeightSummary derives start/current weight, trend slope, and a
-// pace-vs-goal read from a set of entries (oldest first) — the "the scale
-// didn't move but your trend is -1.2 lbs/week" logic.
-func computeWeightSummary(entries []WeightEntry, goalWeightLbs *float64, goalDate *string) weightSummary {
+// computeWeightSummary derives start/current weight and a pace-vs-goal read.
+// trendPerWeek comes straight from the Kalman filter's full-history state —
+// the "the scale didn't move but your trend is -1.2 lbs/week" logic.
+func computeWeightSummary(entries []WeightEntry, trendPerWeek float64, goalWeightLbs *float64, goalDate *string) weightSummary {
 	summary := weightSummary{
 		GoalWeightLbs: goalWeightLbs,
 		GoalDate:      goalDate,
 	}
 
-	if len(entries) > 0 {
-		start := entries[0].WeightLbs
-		current := entries[len(entries)-1].RollingAvg
-		summary.StartWeight = &start
-		summary.CurrentWeight = &current
+	if len(entries) == 0 {
+		return summary
 	}
+
+	start := entries[0].WeightLbs
+	current := entries[len(entries)-1].RollingAvg
+	summary.StartWeight = &start
+	summary.CurrentWeight = &current
 
 	if len(entries) < 2 {
 		return summary
 	}
 
-	first := entries[0]
-	last := entries[len(entries)-1]
-	firstDate, _ := time.Parse("2006-01-02", first.Date)
-	lastDate, _ := time.Parse("2006-01-02", last.Date)
-	weeksElapsed := lastDate.Sub(firstDate).Hours() / 24 / 7
-	if weeksElapsed < 1 {
-		return summary
-	}
-
-	trend := (last.RollingAvg - first.RollingAvg) / weeksElapsed
+	trend := trendPerWeek
 	summary.TrendLbsPerWeek = &trend
 
 	if goalWeightLbs == nil || goalDate == nil {
@@ -162,7 +181,7 @@ func computeWeightSummary(entries []WeightEntry, goalWeightLbs *float64, goalDat
 		return summary
 	}
 
-	needed := (*goalWeightLbs - last.RollingAvg) / weeksRemaining
+	needed := (*goalWeightLbs - current) / weeksRemaining
 	status := "behind_pace"
 	if (needed <= 0 && trend <= needed) || (needed >= 0 && trend >= needed) {
 		status = "on_pace"
@@ -178,7 +197,7 @@ func GetWeightHistory(c *gin.Context) {
 	userID := c.GetString("user_id")
 	days := parseRange(c.DefaultQuery("range", "90d"))
 
-	entries, err := loadWeightEntries(c.Request.Context(), userID, days)
+	entries, trendPerWeek, err := loadWeightEntries(c.Request.Context(), userID, days)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load weight history"})
 		return
@@ -193,7 +212,7 @@ func GetWeightHistory(c *gin.Context) {
 		return
 	}
 
-	summary := computeWeightSummary(entries, profileWeightGoal, profileGoalDate)
+	summary := computeWeightSummary(entries, trendPerWeek, profileWeightGoal, profileGoalDate)
 
 	c.JSON(http.StatusOK, gin.H{"entries": entries, "summary": summary})
 }

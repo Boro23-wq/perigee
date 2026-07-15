@@ -72,6 +72,8 @@ func main() {
 		api.POST("/recipes/:id/log", handlers.LogRecipeMeal)
 		api.POST("/coach/checkin", handlers.CreateCheckin)
 		api.GET("/coach/checkin", handlers.GetCheckin)
+		api.GET("/coach/messages", handlers.GetChatMessages)
+		api.POST("/coach/messages", handlers.PostChatMessage)
 	}
 
 	port := os.Getenv("PORT")

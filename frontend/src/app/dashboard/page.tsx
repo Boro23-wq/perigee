@@ -321,6 +321,12 @@ export default function DashboardPage() {
           <Logo />
           <div className="flex items-center gap-4">
             <Link
+              href="/coach"
+              className="text-[13px] text-muted hover:text-foreground transition-colors"
+            >
+              Coach
+            </Link>
+            <Link
               href="/recipes"
               className="text-[13px] text-muted hover:text-foreground transition-colors"
             >

@@ -124,12 +124,23 @@ CREATE TABLE public.coach_checkins (
   UNIQUE (user_id, date)
 );
 
+-- ---------- coach_messages (interactive chat, distinct from the once-a-day
+-- coach_checkins mood check-in) ----------
+CREATE TABLE public.coach_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('user','assistant')),
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- ---------- indexes (separate statements — inline INDEX is invalid in Postgres) ----------
 CREATE INDEX idx_food_logs_user_date   ON public.food_logs (user_id, date DESC);
 CREATE INDEX idx_weight_logs_user_date ON public.weight_logs (user_id, date DESC);
 CREATE INDEX idx_activity_user_date    ON public.activity_logs (user_id, date DESC);
 CREATE INDEX idx_recipes_creator       ON public.recipes (creator_id);
 CREATE INDEX idx_shares_shared_to      ON public.recipe_shares (shared_to, status);
+CREATE INDEX idx_coach_messages_user_date ON public.coach_messages (user_id, created_at);
 
 -- ============================================================
 -- ROW LEVEL SECURITY
@@ -144,6 +155,7 @@ ALTER TABLE public.recipe_shares  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.food_logs      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.activity_logs  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coach_checkins ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.coach_messages ENABLE ROW LEVEL SECURITY;
 
 -- ---------- profiles: own row only (keyed on id, not user_id) ----------
 CREATE POLICY "own profile select" ON public.profiles
@@ -164,6 +176,9 @@ CREATE POLICY "own rows" ON public.activity_logs
   FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "own rows" ON public.coach_checkins
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "own rows" ON public.coach_messages
   FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- ---------- relationships: both parties can see; requester creates;

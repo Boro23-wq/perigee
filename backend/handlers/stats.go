@@ -177,10 +177,10 @@ func computeWeeklyStats(ctx context.Context, userID string) (*weeklyStats, error
 		`SELECT weight_goal_lbs, goal_date FROM public.profiles WHERE id = $1`, userID,
 	).Scan(&goalWeightLbs, &goalDate)
 
-	weightEntries, err := loadWeightEntries(ctx, userID, 30)
+	weightEntries, trendPerWeek, err := loadWeightEntries(ctx, userID, 30)
 	var weightTrend *weightSummary
 	if err == nil {
-		summary := computeWeightSummary(weightEntries, goalWeightLbs, goalDate)
+		summary := computeWeightSummary(weightEntries, trendPerWeek, goalWeightLbs, goalDate)
 		weightTrend = &summary
 	}
 

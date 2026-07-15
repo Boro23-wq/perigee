@@ -142,10 +142,10 @@ export default function WeightPage() {
         <div className="mt-5 flex items-end justify-between">
           <div>
             <h2 className="label-xs">Trend</h2>
-            <p className="mt-1 text-[13px] text-muted">
-              Daily weigh-ins (dots) with a 7-day rolling average (line). The
-              average is what actually matters, day-to-day swings are just water
-              weight.
+            <p className="mt-1 max-w-md text-[13px] text-muted">
+              Daily weigh-ins (dots) with a smoothed trend line. Your weight
+              swings a few pounds a day from water and food, not fat — the
+              trend line is what actually matters.
             </p>
           </div>
           <div className="flex shrink-0 gap-0.5 rounded-lg border border-border p-0.5">
