@@ -937,11 +937,11 @@ export default function DashboardPage() {
                       placeholder="Name"
                       className="rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
                     />
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
                       <select
                         value={editMealType}
                         onChange={(e) => setEditMealType(e.target.value)}
-                        className="rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                        className="col-span-3 rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft sm:col-span-1"
                       >
                         {MEAL_TYPES.map((t) => (
                           <option key={t} value={t}>
@@ -986,6 +986,16 @@ export default function DashboardPage() {
                           min={0}
                           value={editFat}
                           onChange={(e) => setEditFat(e.target.value)}
+                          className="rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <label className="text-[11px] text-muted">Fiber (g)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={editFiber}
+                          onChange={(e) => setEditFiber(Number(e.target.value))}
                           className="rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
                         />
                       </div>

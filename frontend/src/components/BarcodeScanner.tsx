@@ -3,12 +3,27 @@
 import { useEffect, useRef, useState } from "react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import type { IScannerControls } from "@zxing/browser";
+import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 import { X } from "lucide-react";
 
 type Props = {
   onDetected: (upc: string) => void;
   onClose: () => void;
 };
+
+// Restrict to the 1D formats actually printed on grocery/product packaging
+// and enable TRY_HARDER — with the default (all-formats, no try-harder)
+// hints, zxing-js's decode pass is too conservative to reliably lock onto a
+// barcode at typical phone-camera distance/focus, so the scanner just sits
+// there showing video without ever detecting anything.
+const hints = new Map();
+hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+  BarcodeFormat.EAN_13,
+  BarcodeFormat.EAN_8,
+  BarcodeFormat.UPC_A,
+  BarcodeFormat.UPC_E,
+]);
+hints.set(DecodeHintType.TRY_HARDER, true);
 
 // Uses @zxing/browser (canvas + getUserMedia) rather than the native
 // BarcodeDetector API, since BarcodeDetector isn't implemented in Safari,
@@ -18,7 +33,7 @@ export function BarcodeScanner({ onDetected, onClose }: Props) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const reader = new BrowserMultiFormatReader();
+    const reader = new BrowserMultiFormatReader(hints);
     let controls: IScannerControls | undefined;
     let cancelled = false;
 
@@ -61,7 +76,9 @@ export function BarcodeScanner({ onDetected, onClose }: Props) {
 
       <div className="relative flex flex-1 items-center justify-center overflow-hidden">
         <video ref={videoRef} className="h-full w-full object-cover" muted playsInline />
-        <div className="pointer-events-none absolute h-1/3 w-4/5 rounded-2xl border-2 border-white/70" />
+        <div className="pointer-events-none absolute h-1/3 w-4/5 overflow-hidden rounded-2xl border-2 border-white/70">
+          <div className="animate-scan-line absolute inset-x-0 h-0.5 bg-accent shadow-[0_0_8px_2px_var(--accent)]" />
+        </div>
       </div>
 
       {error && (
