@@ -66,12 +66,26 @@ export default function HistoryPage() {
   const [editError, setEditError] = useState("");
   const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
   const [loadingPhotoId, setLoadingPhotoId] = useState<string | null>(null);
+  const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
 
   const loadPage = useCallback(async (before: string | null) => {
     const query = before ? `?before=${before}&limit=30` : "?limit=30";
     const data = await api.get(`/api/meals/history${query}`);
     return data as { meals: Meal[]; has_more: boolean };
   }, []);
+
+  // Thumbnails are a nice-to-have preview, not the primary "View photo"
+  // flow — fetched in the background, best-effort, one signed URL per
+  // photo-logged meal on the page.
+  function loadThumbnails(pageMeals: Meal[]) {
+    for (const m of pageMeals) {
+      if (!m.photo_path) continue;
+      api
+        .get(`/api/meals/${m.id}/photo-url`)
+        .then(({ url }) => setThumbUrls((prev) => ({ ...prev, [m.id]: url })))
+        .catch(() => {});
+    }
+  }
 
   useEffect(() => {
     const supabase = createClient();
@@ -89,6 +103,7 @@ export default function HistoryPage() {
         const data = await loadPage(null);
         setMeals(data.meals);
         setHasMore(data.has_more);
+        loadThumbnails(data.meals);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load history");
       } finally {
@@ -107,6 +122,7 @@ export default function HistoryPage() {
       const data = await loadPage(oldest);
       setMeals((prev) => [...prev, ...data.meals]);
       setHasMore(data.has_more);
+      loadThumbnails(data.meals);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load more");
     } finally {
@@ -312,11 +328,23 @@ export default function HistoryPage() {
                       </div>
                     ) : (
                       <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-[13px] font-medium">{m.name}</p>
-                          <div className="mt-1 flex items-center gap-1.5 text-xs text-muted">
-                            <span>{m.calories} cal</span>
-                            <MealTypeBadge type={m.meal_type} />
+                        <div className="flex items-center gap-3">
+                          {m.photo_path && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={thumbUrls[m.id]}
+                              alt=""
+                              className={`h-10 w-10 shrink-0 rounded-lg object-cover ${
+                                thumbUrls[m.id] ? "bg-surface-2" : "invisible"
+                              }`}
+                            />
+                          )}
+                          <div>
+                            <p className="text-[13px] font-medium">{m.name}</p>
+                            <div className="mt-1 flex items-center gap-1.5 text-xs text-muted">
+                              <span>{m.calories} cal</span>
+                              <MealTypeBadge type={m.meal_type} />
+                            </div>
                           </div>
                         </div>
 

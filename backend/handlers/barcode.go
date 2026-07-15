@@ -1,11 +1,16 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
+	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -87,6 +92,18 @@ func GetBarcodeProduct(c *gin.Context) {
 	}
 
 	if off.Status != 1 || off.Product.ProductName == "" {
+		// Open Food Facts is community-sourced and misses plenty of US
+		// retail products. USDA FoodData Central's Branded Foods dataset
+		// (free, no per-user gating unlike commercial APIs) fills some of
+		// those gaps, so it's tried as a second lookup on a miss here.
+		usdaProduct, err := lookupUSDA(c.Request.Context(), upc)
+		if err != nil {
+			log.Printf("lookupUSDA error: %v", err)
+		}
+		if usdaProduct != nil {
+			c.JSON(http.StatusOK, usdaProduct)
+			return
+		}
 		c.JSON(http.StatusNotFound, gin.H{"error": "no product found for this barcode"})
 		return
 	}
@@ -107,6 +124,103 @@ func GetBarcodeProduct(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, product)
+}
+
+type usdaSearchResponse struct {
+	Foods []struct {
+		Description     string  `json:"description"`
+		GtinUpc         string  `json:"gtinUpc"`
+		ServingSize     float64 `json:"servingSize"`
+		ServingSizeUnit string  `json:"servingSizeUnit"`
+		FoodNutrients   []struct {
+			NutrientName string  `json:"nutrientName"`
+			Value        float64 `json:"value"`
+		} `json:"foodNutrients"`
+	} `json:"foods"`
+}
+
+// normalizeUPC strips leading zeros so a 12-digit UPC-A and its 13-digit
+// EAN form (zero-padded) compare equal — USDA and the scanner don't always
+// agree on which form they store/send.
+func normalizeUPC(upc string) string {
+	return strings.TrimLeft(upc, "0")
+}
+
+// lookupUSDA is a second, free fallback for barcodes Open Food Facts
+// doesn't have. FoodData Central's Branded Foods dataset reports nutrients
+// per 100g, same convention as Open Food Facts, so no per-serving scaling
+// is needed here (unlike a commercial API reporting per-serving values).
+func lookupUSDA(ctx context.Context, upc string) (*barcodeProduct, error) {
+	apiKey := os.Getenv("USDA_FDC_API_KEY")
+	if apiKey == "" {
+		return nil, nil
+	}
+
+	query := url.Values{}
+	query.Set("query", upc)
+	query.Set("dataType", "Branded")
+	query.Set("pageSize", "5")
+	query.Set("api_key", apiKey)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		"https://api.nal.usda.gov/fdc/v1/foods/search?"+query.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("USDA FDC api error (%d): %s", resp.StatusCode, string(body))
+		return nil, nil
+	}
+
+	var parsed usdaSearchResponse
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil, err
+	}
+
+	target := normalizeUPC(upc)
+	for _, food := range parsed.Foods {
+		if normalizeUPC(food.GtinUpc) != target {
+			continue
+		}
+
+		product := &barcodeProduct{Name: food.Description}
+		for _, n := range food.FoodNutrients {
+			switch n.NutrientName {
+			case "Energy":
+				product.CaloriesPer100 = n.Value
+			case "Protein":
+				product.ProteinPer100 = n.Value
+			case "Carbohydrate, by difference":
+				product.CarbsPer100 = n.Value
+			case "Total lipid (fat)":
+				product.FatPer100 = n.Value
+			case "Fiber, total dietary":
+				product.FiberPer100 = n.Value
+			}
+		}
+		if food.ServingSize > 0 {
+			grams := food.ServingSize
+			product.ServingGrams = &grams
+		}
+		if food.ServingSize > 0 && food.ServingSizeUnit != "" {
+			label := fmt.Sprintf("%g%s", food.ServingSize, food.ServingSizeUnit)
+			product.ServingLabel = &label
+		}
+		return product, nil
+	}
+
+	return nil, nil
 }
 
 type logBarcodeMealRequest struct {

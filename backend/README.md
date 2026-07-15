@@ -36,8 +36,8 @@ gcloud run deploy perigee-api \
 Env vars (`DATABASE_URL`, `SUPABASE_JWT_SECRET`, `SUPABASE_URL`, `FRONTEND_ORIGIN`,
 `SUPABASE_SERVICE_ROLE_KEY`, `MEAL_PHOTOS_BUCKET`, `AVATARS_BUCKET`,
 `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `CRON_SECRET`, `VAPID_PUBLIC_KEY`,
-`VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`) are set via `--env-vars-file` (a YAML of
-`KEY: value` built from `.env`) or updated afterward with:
+`VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `USDA_FDC_API_KEY`) are set via
+`--env-vars-file` (a YAML of `KEY: value` built from `.env`) or updated afterward with:
 
 ```bash
 gcloud run services update perigee-api --region=northamerica-northeast1 \
