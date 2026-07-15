@@ -53,7 +53,9 @@ export function AppHeader() {
     <>
       <header className="relative z-50 border-b border-border bg-surface">
         <div className="relative flex items-center justify-between px-4 py-3 sm:px-6 md:px-8">
-          <Logo />
+          <Link href="/dashboard">
+            <Logo />
+          </Link>
 
           <div className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 md:flex">
             {NAV_ITEMS.filter((item) => item.pinned).map(({ href, label, icon: Icon }) => {

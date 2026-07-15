@@ -949,38 +949,46 @@ export default function DashboardPage() {
                           </option>
                         ))}
                       </select>
-                      <input
-                        type="number"
-                        min={0}
-                        value={editCalories}
-                        onChange={(e) => setEditCalories(e.target.value)}
-                        placeholder="Cal"
-                        className="rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
-                      />
-                      <input
-                        type="number"
-                        min={0}
-                        value={editProtein}
-                        onChange={(e) => setEditProtein(e.target.value)}
-                        placeholder="Protein"
-                        className="rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
-                      />
-                      <input
-                        type="number"
-                        min={0}
-                        value={editCarbs}
-                        onChange={(e) => setEditCarbs(e.target.value)}
-                        placeholder="Carbs"
-                        className="rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
-                      />
-                      <input
-                        type="number"
-                        min={0}
-                        value={editFat}
-                        onChange={(e) => setEditFat(e.target.value)}
-                        placeholder="Fat"
-                        className="rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
-                      />
+                      <div className="flex flex-col gap-0.5">
+                        <label className="text-[11px] text-muted">Cal</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={editCalories}
+                          onChange={(e) => setEditCalories(e.target.value)}
+                          className="rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <label className="text-[11px] text-muted">Protein (g)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={editProtein}
+                          onChange={(e) => setEditProtein(e.target.value)}
+                          className="rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <label className="text-[11px] text-muted">Carbs (g)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={editCarbs}
+                          onChange={(e) => setEditCarbs(e.target.value)}
+                          className="rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <label className="text-[11px] text-muted">Fat (g)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={editFat}
+                          onChange={(e) => setEditFat(e.target.value)}
+                          className="rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                        />
+                      </div>
                     </div>
                     {editError && <p className="text-[13px] text-danger">{editError}</p>}
                     <div className="flex gap-2">
