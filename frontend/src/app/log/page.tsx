@@ -328,7 +328,7 @@ export default function LogPage() {
               <div className="mt-3 rounded-xl border border-border bg-surface p-4 shadow-soft">
                 <div className="flex items-center justify-between">
                   <p className="text-[13px] font-medium">{photoResult.name}</p>
-                  <ConfidenceMeter confidence={photoResult.ai_confidence} />
+                  <ConfidenceMeter confidence={photoResult.ai_confidence} showLabel />
                 </div>
                 <p className="mt-3 text-2xl font-semibold tabular-nums tracking-tight">
                   {adjustedCalories} cal
