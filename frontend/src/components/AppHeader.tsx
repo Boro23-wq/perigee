@@ -11,8 +11,9 @@ import {
   UtensilsCrossed,
   Users,
   User as UserIcon,
-  LogOut,
   LayoutGrid,
+  History,
+  MessageSquarePlus,
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -23,10 +24,17 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: Home, pinned: true },
   { href: "/log", label: "Log", icon: PlusCircle, pinned: true },
   { href: "/weight", label: "Weight", icon: Scale, pinned: true },
+  { href: "/history", label: "History", icon: History, pinned: false },
   { href: "/coach", label: "Coach", icon: MessageCircle, pinned: false },
   { href: "/recipes", label: "Recipes", icon: UtensilsCrossed, pinned: false },
   { href: "/partner", label: "Partner", icon: Users, pinned: false },
   { href: "/profile", label: "Profile", icon: UserIcon, pinned: false },
+  {
+    href: "/feedback",
+    label: "Feedback",
+    icon: MessageSquarePlus,
+    pinned: false,
+  },
 ];
 
 export function AppHeader() {
@@ -44,12 +52,10 @@ export function AppHeader() {
   return (
     <>
       <header className="relative z-50 border-b border-border bg-surface">
-        <div className="relative z-50 grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 sm:px-6 md:px-8">
-          <div className="justify-self-start">
-            <Logo />
-          </div>
+        <div className="relative flex items-center justify-between px-4 py-3 sm:px-6 md:px-8">
+          <Logo />
 
-          <div className="hidden items-center gap-1 justify-self-center md:flex">
+          <div className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 md:flex">
             {NAV_ITEMS.filter((item) => item.pinned).map(({ href, label, icon: Icon }) => {
               const active = pathname === href || pathname.startsWith(`${href}/`);
               return (
@@ -70,7 +76,7 @@ export function AppHeader() {
             })}
           </div>
 
-          <div className="flex items-center gap-4 justify-self-end">
+          <div className="flex items-center gap-2.5">
             <button
               onClick={() => setMenuOpen((open) => !open)}
               aria-label={menuOpen ? "Close menu" : "Open menu"}
@@ -82,9 +88,8 @@ export function AppHeader() {
             <ThemeToggle />
             <button
               onClick={handleLogout}
-              className="flex items-center gap-1.5 text-[13px] font-medium text-muted transition-colors hover:text-foreground"
+              className="text-[13px] font-medium text-muted transition-colors hover:text-foreground"
             >
-              <LogOut size={14} strokeWidth={2} />
               Sign out
             </button>
           </div>

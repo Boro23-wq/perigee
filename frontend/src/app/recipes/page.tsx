@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { AppHeader } from "@/components/AppHeader";
-import { Check, MoreVertical, Pencil, Share2, Trash2 } from "lucide-react";
+import { Check, MoreVertical, Pencil, Search, Share2, Star, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { localDateString } from "@/lib/date";
 import { Skeleton } from "@/components/Skeleton";
@@ -17,6 +17,8 @@ type Recipe = {
   fiber: number;
   servings: number;
   ingredients: string[];
+  tags: string[];
+  is_favorite: boolean;
   share_token: string | null;
   mine: boolean;
 };
@@ -45,21 +47,65 @@ export default function RecipesPage() {
   const [fat, setFat] = useState("");
   const [fiber, setFiber] = useState("");
   const [ingredientsText, setIngredientsText] = useState("");
+  const [tagsText, setTagsText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [allTags, setAllTags] = useState<string[]>([]);
+
   useEffect(() => {
-    async function run() {
-      try {
-        const data = await api.get("/api/recipes");
-        setRecipes(data.recipes);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load recipes");
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const loadRecipes = useCallback(async () => {
+    const params = new URLSearchParams();
+    if (debouncedSearch) params.set("q", debouncedSearch);
+    if (tagFilter) params.set("tag", tagFilter);
+    if (favoritesOnly) params.set("favorite", "true");
+    try {
+      const data = await api.get(`/api/recipes?${params.toString()}`);
+      setRecipes(data.recipes);
+      if (!debouncedSearch && !tagFilter && !favoritesOnly) {
+        const tags = new Set<string>();
+        for (const r of data.recipes as Recipe[]) r.tags.forEach((t) => tags.add(t));
+        setAllTags(Array.from(tags).sort());
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load recipes");
     }
-    run();
-  }, []);
+  }, [debouncedSearch, tagFilter, favoritesOnly]);
+
+  useEffect(() => {
+    loadRecipes();
+  }, [loadRecipes]);
+
+  async function toggleFavorite(recipe: Recipe) {
+    setRecipes(
+      (prev) =>
+        prev?.map((r) =>
+          r.id === recipe.id ? { ...r, is_favorite: !r.is_favorite } : r,
+        ) ?? null,
+    );
+    try {
+      if (recipe.is_favorite) {
+        await api.delete(`/api/recipes/${recipe.id}/favorite`);
+      } else {
+        await api.post(`/api/recipes/${recipe.id}/favorite`, {});
+      }
+    } catch (err) {
+      setRecipes(
+        (prev) =>
+          prev?.map((r) => (r.id === recipe.id ? recipe : r)) ?? null,
+      );
+      setError(err instanceof Error ? err.message : "Failed to update favorite");
+    }
+  }
 
   function showToast(message: string) {
     setToast({ message });
@@ -109,6 +155,7 @@ export default function RecipesPage() {
     setFat("");
     setFiber("");
     setIngredientsText("");
+    setTagsText("");
   }
 
   function handleEdit(recipe: Recipe) {
@@ -122,6 +169,7 @@ export default function RecipesPage() {
     setFat(recipe.fat ? String(recipe.fat) : "");
     setFiber(recipe.fiber ? String(recipe.fiber) : "");
     setIngredientsText(recipe.ingredients.join("\n"));
+    setTagsText(recipe.tags.join(", "));
     document.getElementById("recipeName")?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
@@ -142,6 +190,10 @@ export default function RecipesPage() {
         .split("\n")
         .map((s) => s.trim())
         .filter(Boolean),
+      tags: tagsText
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean),
     };
 
     try {
@@ -153,6 +205,7 @@ export default function RecipesPage() {
         setRecipes((prev) => [recipe, ...(prev ?? [])]);
       }
       resetForm();
+      loadRecipes();
     } catch (err) {
       setError(
         err instanceof Error ? err.message : `Failed to ${editingId ? "update" : "create"} recipe`
@@ -173,9 +226,56 @@ export default function RecipesPage() {
 
         <section className="mt-6">
           <h2 className="label-xs">My recipes</h2>
+
+          <div className="mt-3 flex flex-col gap-2">
+            <div className="relative">
+              <Search
+                size={14}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+              />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search recipes"
+                className="w-full rounded-lg border border-border bg-surface-2 py-2 pl-8 pr-3 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+              />
+            </div>
+
+            {(allTags.length > 0 || favoritesOnly) && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  onClick={() => setFavoritesOnly((v) => !v)}
+                  className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors ${
+                    favoritesOnly
+                      ? "border-accent bg-accent-soft text-accent"
+                      : "border-border text-muted hover:text-foreground"
+                  }`}
+                >
+                  <Star size={12} className={favoritesOnly ? "fill-current" : ""} />
+                  Favorites
+                </button>
+                {allTags.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setTagFilter((cur) => (cur === t ? null : t))}
+                    className={`rounded-full border px-2.5 py-1 text-[12px] font-medium capitalize transition-colors ${
+                      tagFilter === t
+                        ? "border-accent bg-accent-soft text-accent"
+                        : "border-border text-muted hover:text-foreground"
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           {recipes && recipes.length === 0 && (
             <p className="mt-3 rounded-xl border border-dashed border-border p-5 text-center text-[13px] text-muted">
-              No recipes yet. Build one below, or accept a share link from your partner.
+              {search || tagFilter || favoritesOnly
+                ? "No recipes match."
+                : "No recipes yet. Build one below, or accept a share link from your partner."}
             </p>
           )}
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -202,16 +302,40 @@ export default function RecipesPage() {
                       {Math.round(r.total_calories / r.servings)} cal/serving ·{" "}
                       {r.servings} servings
                     </p>
+                    {r.tags.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {r.tags.map((t) => (
+                          <span
+                            key={t}
+                            className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium capitalize text-muted"
+                          >
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  {(r.mine || r.share_token) && (
+                  <div className="flex shrink-0 items-center gap-1">
                     <button
-                      onClick={() => setOpenMenuId((id) => (id === r.id ? null : r.id))}
-                      aria-label={`More actions for ${r.name}`}
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                      onClick={() => toggleFavorite(r)}
+                      aria-label={r.is_favorite ? "Remove favorite" : "Mark as favorite"}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
                     >
-                      <MoreVertical size={16} />
+                      <Star
+                        size={16}
+                        className={r.is_favorite ? "fill-accent text-accent" : ""}
+                      />
                     </button>
-                  )}
+                    {(r.mine || r.share_token) && (
+                      <button
+                        onClick={() => setOpenMenuId((id) => (id === r.id ? null : r.id))}
+                        aria-label={`More actions for ${r.name}`}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                      >
+                        <MoreVertical size={16} />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <button
@@ -364,6 +488,19 @@ export default function RecipesPage() {
                   className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
                 />
               </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label htmlFor="tags" className="text-[13px] font-medium text-muted">
+                Tags (comma-separated, optional)
+              </label>
+              <input
+                id="tags"
+                value={tagsText}
+                onChange={(e) => setTagsText(e.target.value)}
+                placeholder="high-protein, quick, breakfast"
+                className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+              />
             </div>
 
             <div className="flex flex-col gap-1">

@@ -34,9 +34,10 @@ gcloud run deploy perigee-api \
 ```
 
 Env vars (`DATABASE_URL`, `SUPABASE_JWT_SECRET`, `SUPABASE_URL`, `FRONTEND_ORIGIN`,
-`SUPABASE_SERVICE_ROLE_KEY`, `MEAL_PHOTOS_BUCKET`, `ANTHROPIC_API_KEY`,
-`ANTHROPIC_MODEL`) are set via `--env-vars-file` (a YAML of `KEY: value` built
-from `.env`) or updated afterward with:
+`SUPABASE_SERVICE_ROLE_KEY`, `MEAL_PHOTOS_BUCKET`, `AVATARS_BUCKET`,
+`ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `CRON_SECRET`, `VAPID_PUBLIC_KEY`,
+`VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`) are set via `--env-vars-file` (a YAML of
+`KEY: value` built from `.env`) or updated afterward with:
 
 ```bash
 gcloud run services update perigee-api --region=northamerica-northeast1 \
@@ -70,3 +71,14 @@ Storage -> New bucket -> Private) and `SUPABASE_SERVICE_ROLE_KEY` /
    `user_adjusted = true`.
 4. `GET /api/meals/:id/photo-url` — short-lived signed URL to display a
    logged meal's photo.
+
+## Push notifications & cron
+
+`/api/internal/cron/*` (morning/evening logging reminders, milestone checks)
+is meant to be hit by Cloud Scheduler, not the frontend — it's gated by
+`middleware.InternalAuthRequired()`, which checks the `X-Internal-Secret`
+header against `CRON_SECRET`. Notifications themselves are Web Push, sent via
+`push.SendToUser` using the `VAPID_*` keypair; the public key is exposed to
+the frontend at `GET /api/push/vapid-public-key` so it never has to be baked
+into the frontend build. Partner "pokes" (`handlers/pokes.go`) and milestone
+nudges reuse the same `push` package.

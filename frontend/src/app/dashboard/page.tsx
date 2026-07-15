@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, MoreVertical } from "lucide-react";
+import { ArrowRight, Flame, MoreVertical } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { api } from "@/lib/api";
 import { localDateString } from "@/lib/date";
@@ -11,8 +11,26 @@ import { AppHeader } from "@/components/AppHeader";
 import { Skeleton } from "@/components/Skeleton";
 import { MealTypeBadge } from "@/components/MealTypeBadge";
 import { ConfidenceMeter } from "@/components/ConfidenceMeter";
+import { Sparkline } from "@/components/Sparkline";
 
 const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack", "drink"] as const;
+
+// Calm/neutral early in the day, sliding through the accent blue, then
+// warning amber, then danger red as consumed calories approach and pass
+// the budget — so the bar itself signals "ease up" before the number does.
+function calorieBarColor(ratio: number) {
+  const r = Math.max(0, ratio);
+  if (r <= 0.5) {
+    const t = r / 0.5;
+    return `color-mix(in srgb, var(--muted-2) ${(1 - t) * 100}%, var(--accent) ${t * 100}%)`;
+  }
+  if (r <= 0.85) {
+    const t = (r - 0.5) / 0.35;
+    return `color-mix(in srgb, var(--accent) ${(1 - t) * 100}%, var(--warn) ${t * 100}%)`;
+  }
+  const t = Math.min(1, (r - 0.85) / 0.3);
+  return `color-mix(in srgb, var(--warn) ${(1 - t) * 100}%, var(--danger) ${t * 100}%)`;
+}
 
 type Meal = {
   id: string;
@@ -63,6 +81,13 @@ type WeeklyStats = {
   remaining_budget: number;
   remaining_per_day: number;
   weight_trend: WeightSummary | null;
+};
+
+type Streak = {
+  current_streak: number;
+  longest_streak: number;
+  logged_today: boolean;
+  last_7_days: boolean[];
 };
 
 type Activity = {
@@ -154,8 +179,11 @@ export default function DashboardPage() {
   const [meals, setMeals] = useState<Meal[] | null>(null);
   const [totals, setTotals] = useState<Totals | null>(null);
   const [stats, setStats] = useState<WeeklyStats | null>(null);
+  const [streak, setStreak] = useState<Streak | null>(null);
+  const [weightSparkline, setWeightSparkline] = useState<number[] | null>(
+    null,
+  );
   const [activity, setActivity] = useState<Activity | null>(null);
-  const [activityOpen, setActivityOpen] = useState(false);
   const [activitySubmitting, setActivitySubmitting] = useState(false);
   const [error, setError] = useState("");
   const [partner, setPartner] = useState<PartnerStatus | null>(null);
@@ -192,6 +220,17 @@ export default function DashboardPage() {
     setStats(data);
   }, []);
 
+  const loadStreak = useCallback(async () => {
+    const data = await api.get("/api/streaks");
+    setStreak(data);
+  }, []);
+
+  const loadWeightSparkline = useCallback(async () => {
+    const data = await api.get("/api/weight/history?range=14d");
+    const entries: { rolling_avg: number }[] = data.entries;
+    setWeightSparkline(entries.map((e) => e.rolling_avg));
+  }, []);
+
   const loadActivity = useCallback(async () => {
     const data = await api.get(`/api/activity?date=${localDateString()}`);
     setActivity(data);
@@ -200,6 +239,22 @@ export default function DashboardPage() {
   const loadPartner = useCallback(async () => {
     const data = await api.get("/api/partner");
     setPartner(data);
+  }, []);
+
+  const loadMilestones = useCallback(async () => {
+    try {
+      const data = await api.get("/api/milestones/pending");
+      const pending: { key: string; label: string }[] = data.milestones;
+      if (pending.length > 0) {
+        setBanner(pending.map((m) => m.label).join(" · "));
+        setTimeout(() => setBanner(null), 5000);
+        await Promise.all(
+          pending.map((m) => api.post(`/api/milestones/${m.key}/ack`, {})),
+        );
+      }
+    } catch {
+      // best-effort — a failed milestone check shouldn't block the dashboard
+    }
   }, []);
 
   const loadCheckin = useCallback(async () => {
@@ -247,10 +302,13 @@ export default function DashboardPage() {
         await Promise.all([
           loadMeals(),
           loadStats(),
+          loadStreak(),
+          loadWeightSparkline(),
           loadActivity(),
           loadPartner(),
           loadCheckin(),
         ]);
+        await loadMilestones();
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Failed to load dashboard",
@@ -259,7 +317,17 @@ export default function DashboardPage() {
     }
 
     load();
-  }, [router, loadMeals, loadStats, loadActivity, loadPartner, loadCheckin]);
+  }, [
+    router,
+    loadMeals,
+    loadStats,
+    loadStreak,
+    loadWeightSparkline,
+    loadActivity,
+    loadPartner,
+    loadCheckin,
+    loadMilestones,
+  ]);
 
   // First time a shared meal from a partner shows up, flag it: a one-time
   // highlight + banner, tracked in localStorage so it never repeats.
@@ -318,7 +386,6 @@ export default function DashboardPage() {
         calories_burned: caloriesBurned ? Number(caloriesBurned) : 0,
       });
       await Promise.all([loadActivity(), loadStats()]);
-      setActivityOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to log activity");
     } finally {
@@ -418,6 +485,7 @@ export default function DashboardPage() {
   const pct =
     budget > 0 ? Math.min(100, Math.round((consumed / budget) * 100)) : 0;
   const remaining = budget - consumed;
+  const budgetRatio = budget > 0 ? consumed / budget : 0;
 
   const partnerName =
     partner?.status === "active" && partner.partner
@@ -469,8 +537,8 @@ export default function DashboardPage() {
             </div>
             <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
               <div
-                className="h-full rounded-full bg-accent transition-all"
-                style={{ width: `${pct}%` }}
+                className="h-full rounded-full transition-all"
+                style={{ width: `${pct}%`, backgroundColor: calorieBarColor(budgetRatio) }}
               />
             </div>
             <p className="mt-2 text-[13px] text-muted">
@@ -553,9 +621,9 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="mt-3">
           {!stats && (
-            <div className="rounded-xl border border-border bg-surface p-5 shadow-soft sm:col-span-2">
+            <div className="rounded-xl border border-border bg-surface p-5 shadow-soft">
               <div className="flex items-baseline justify-between">
                 <div>
                   <Skeleton className="h-3 w-20" />
@@ -578,7 +646,7 @@ export default function DashboardPage() {
             </div>
           )}
           {stats && (
-            <div className="rounded-xl border border-border bg-surface p-5 shadow-soft sm:col-span-2">
+            <div className="rounded-xl border border-border bg-surface p-5 shadow-soft">
               <div className="flex items-baseline justify-between">
                 <div>
                   <p className="label-xs">This week</p>
@@ -643,15 +711,72 @@ export default function DashboardPage() {
               </div>
             </div>
           )}
+        </div>
 
-          <div className="rounded-xl border border-border bg-surface p-5 shadow-soft">
-            <button
-              onClick={() => setActivityOpen((o) => !o)}
-              className="group flex w-full items-center justify-between text-left"
-            >
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:grid-rows-2">
+          <div className="flex flex-col rounded-xl border border-border bg-surface p-5 shadow-soft sm:col-start-1 sm:row-start-1">
+            <p className="label-xs">Streak</p>
+            <div className="mt-1 flex items-center gap-1.5">
+              <Flame
+                size={18}
+                className={
+                  streak && streak.current_streak > 0
+                    ? "text-accent"
+                    : "text-muted"
+                }
+              />
+              <p className="text-base font-semibold tracking-tight">
+                {streak
+                  ? `${streak.current_streak} day${streak.current_streak === 1 ? "" : "s"}`
+                  : "—"}
+              </p>
+            </div>
+            <p className="mt-1 text-xs text-muted">
+              {streak
+                ? `Longest: ${streak.longest_streak}${streak.logged_today ? "" : " · not logged today yet"}`
+                : "Log a meal and your weight to start a streak"}
+            </p>
+            <div className="mt-auto flex items-center gap-1.5 pt-3">
+              {(streak?.last_7_days ?? Array(7).fill(false)).map(
+                (logged, i) => (
+                  <span
+                    key={i}
+                    className={`h-1.5 flex-1 rounded-full ${
+                      logged ? "bg-accent" : "bg-surface-2"
+                    }`}
+                  />
+                ),
+              )}
+            </div>
+          </div>
+
+          <Link
+            href="/weight"
+            className="flex flex-col justify-between rounded-xl border border-border bg-surface p-5 shadow-soft transition-colors hover:border-accent sm:col-start-1 sm:row-start-2"
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="label-xs">Weight</p>
+                <p className="mt-1 text-base font-semibold tracking-tight">
+                  {stats?.weight_trend?.current_weight
+                    ? `${stats.weight_trend.current_weight.toFixed(1)} lbs`
+                    : "Log weigh-in"}
+                </p>
+              </div>
+              <span className="flex items-center gap-1 text-xs text-muted">
+                Trend <ArrowRight size={12} />
+              </span>
+            </div>
+            <div className="mt-3">
+              <Sparkline values={weightSparkline ?? []} />
+            </div>
+          </Link>
+
+          <div className="rounded-xl border border-border bg-surface p-5 shadow-soft sm:col-start-2 sm:row-start-1 sm:row-span-2">
+            <div className="flex w-full items-center justify-between text-left">
               <div>
                 <p className="label-xs">Activity</p>
-                <p className="mt-1 text-base font-semibold tracking-tight transition-colors group-hover:text-accent">
+                <p className="mt-1 text-base font-semibold tracking-tight">
                   {activity?.calories_burned
                     ? `${activity.calories_burned} cal burned`
                     : "Log activity"}
@@ -668,116 +793,99 @@ export default function DashboardPage() {
                   </p>
                 )}
               </div>
-              <span className="text-xs text-muted transition-colors group-hover:text-foreground">
-                {activityOpen ? "Close" : "Edit"}
-              </span>
-            </button>
-
-            {activityOpen && (
-              <form
-                onSubmit={handleActivitySubmit}
-                className="mt-4 flex flex-col gap-3"
-              >
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor="steps"
-                      className="text-[13px] font-medium text-muted"
-                    >
-                      Steps
-                    </label>
-                    <input
-                      id="steps"
-                      name="steps"
-                      type="number"
-                      min={0}
-                      max={200000}
-                      inputMode="numeric"
-                      defaultValue={activity?.steps ?? ""}
-                      className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor="calories_burned"
-                      className="text-[13px] font-medium text-muted"
-                    >
-                      Cal burned
-                    </label>
-                    <input
-                      id="calories_burned"
-                      name="calories_burned"
-                      type="number"
-                      min={0}
-                      max={5000}
-                      inputMode="numeric"
-                      defaultValue={activity?.calories_burned || ""}
-                      className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor="workout_type"
-                      className="text-[13px] font-medium text-muted"
-                    >
-                      Workout
-                    </label>
-                    <input
-                      id="workout_type"
-                      name="workout_type"
-                      type="text"
-                      placeholder="Running"
-                      defaultValue={activity?.workout_type ?? ""}
-                      className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor="workout_minutes"
-                      className="text-[13px] font-medium text-muted"
-                    >
-                      Minutes
-                    </label>
-                    <input
-                      id="workout_minutes"
-                      name="workout_minutes"
-                      type="number"
-                      min={0}
-                      inputMode="numeric"
-                      defaultValue={activity?.workout_minutes ?? ""}
-                      className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
-                    />
-                  </div>
-                </div>
-                <button
-                  type="submit"
-                  disabled={activitySubmitting}
-                  className="mt-1 rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground shadow-soft transition-opacity hover:opacity-90 disabled:opacity-50"
-                >
-                  {activitySubmitting ? "Saving…" : "Save"}
-                </button>
-              </form>
-            )}
-          </div>
-
-          <Link
-            href="/weight"
-            className="flex items-center justify-between rounded-xl border border-border bg-surface p-5 shadow-soft transition-colors hover:border-accent"
-          >
-            <div>
-              <p className="label-xs">Weight</p>
-              <p className="mt-1 text-base font-semibold tracking-tight">
-                {stats?.weight_trend?.current_weight
-                  ? `${stats.weight_trend.current_weight.toFixed(1)} lbs`
-                  : "Log weigh-in"}
-              </p>
             </div>
-            <span className="flex items-center gap-1 text-xs text-muted">
-              Trend <ArrowRight size={12} />
-            </span>
-          </Link>
+
+            <form
+              key={
+                activity
+                  ? `${activity.steps}-${activity.workout_type}-${activity.workout_minutes}-${activity.calories_burned}`
+                  : "empty"
+              }
+              onSubmit={handleActivitySubmit}
+              className="mt-4 flex flex-col gap-3"
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label
+                    htmlFor="steps"
+                    className="text-[13px] font-medium text-muted"
+                  >
+                    Steps
+                  </label>
+                  <input
+                    id="steps"
+                    name="steps"
+                    type="number"
+                    min={0}
+                    max={200000}
+                    inputMode="numeric"
+                    defaultValue={activity?.steps ?? ""}
+                    className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label
+                    htmlFor="calories_burned"
+                    className="text-[13px] font-medium text-muted"
+                  >
+                    Cal burned
+                  </label>
+                  <input
+                    id="calories_burned"
+                    name="calories_burned"
+                    type="number"
+                    min={0}
+                    max={5000}
+                    inputMode="numeric"
+                    defaultValue={activity?.calories_burned || ""}
+                    className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label
+                    htmlFor="workout_type"
+                    className="text-[13px] font-medium text-muted"
+                  >
+                    Workout
+                  </label>
+                  <input
+                    id="workout_type"
+                    name="workout_type"
+                    type="text"
+                    placeholder="Running"
+                    defaultValue={activity?.workout_type ?? ""}
+                    className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label
+                    htmlFor="workout_minutes"
+                    className="text-[13px] font-medium text-muted"
+                  >
+                    Minutes
+                  </label>
+                  <input
+                    id="workout_minutes"
+                    name="workout_minutes"
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    defaultValue={activity?.workout_minutes ?? ""}
+                    className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={activitySubmitting}
+                className="mt-1 rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground shadow-soft transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {activitySubmitting ? "Saving…" : "Save"}
+              </button>
+            </form>
+          </div>
         </div>
 
         <div className="mt-6 flex items-center justify-between">

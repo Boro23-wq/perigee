@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import { Flame } from "lucide-react";
 import { api } from "@/lib/api";
 import { AppHeader } from "@/components/AppHeader";
 import { Skeleton } from "@/components/Skeleton";
@@ -17,11 +18,25 @@ type PartnerStatus = {
   partner: PartnerInfo | null;
 };
 
+type ComparisonSide = {
+  logged_today: boolean;
+  current_streak: number;
+};
+
+type Comparison = {
+  me: ComparisonSide;
+  partner: ComparisonSide;
+};
+
 export default function PartnerPage() {
   const [status, setStatus] = useState<PartnerStatus | null>(null);
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [comparison, setComparison] = useState<Comparison | null>(null);
+  const [poking, setPoking] = useState(false);
+  const [pokedToday, setPokedToday] = useState(false);
+  const [pokeBanner, setPokeBanner] = useState<string | null>(null);
 
   async function load() {
     const data = await api.get("/api/partner");
@@ -33,12 +48,35 @@ export default function PartnerPage() {
       try {
         const data = await api.get("/api/partner");
         setStatus(data);
+        if (data.status === "active") {
+          const cmp = await api.get("/api/partner/comparison");
+          setComparison(cmp);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load");
       }
     }
     run();
   }, []);
+
+  async function handlePoke() {
+    setPoking(true);
+    setError("");
+    try {
+      await api.post("/api/partner/poke", {});
+      setPokedToday(true);
+      setPokeBanner(`Poked ${partnerName ?? "your partner"}!`);
+      setTimeout(() => setPokeBanner(null), 5000);
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("already poked")) {
+        setPokedToday(true);
+      } else {
+        setError(err instanceof Error ? err.message : "Failed to poke");
+      }
+    } finally {
+      setPoking(false);
+    }
+  }
 
   async function handleRequest(e: FormEvent) {
     e.preventDefault();
@@ -179,7 +217,57 @@ export default function PartnerPage() {
             </button>
           </div>
         )}
+
+        {status?.status === "active" && comparison && (
+          <div className="mt-3 rounded-xl border border-border bg-surface p-5 shadow-soft">
+            <p className="label-xs">Today</p>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-[13px] text-muted">You</p>
+                <p className="mt-1 text-sm font-medium">
+                  {comparison.me.logged_today ? "✓ Logged" : "Not logged yet"}
+                </p>
+                <div className="mt-1 flex items-center gap-1 text-xs text-muted">
+                  <Flame
+                    size={13}
+                    className={comparison.me.current_streak > 0 ? "text-accent" : ""}
+                  />
+                  {comparison.me.current_streak} day streak
+                </div>
+              </div>
+              <div>
+                <p className="text-[13px] text-muted">{partnerName}</p>
+                <p className="mt-1 text-sm font-medium">
+                  {comparison.partner.logged_today ? "✓ Logged" : "Not logged yet"}
+                </p>
+                <div className="mt-1 flex items-center gap-1 text-xs text-muted">
+                  <Flame
+                    size={13}
+                    className={comparison.partner.current_streak > 0 ? "text-accent" : ""}
+                  />
+                  {comparison.partner.current_streak} day streak
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handlePoke}
+              disabled={poking || pokedToday}
+              className="mt-4 w-full rounded-lg border border-border bg-surface-2 px-4 py-2 text-[13px] font-medium transition-colors hover:border-accent disabled:opacity-60"
+            >
+              {pokedToday ? "Poked today ✓" : poking ? "Poking…" : `Poke ${partnerName}`}
+            </button>
+          </div>
+        )}
       </main>
+
+      {pokeBanner && (
+        <div className="fixed inset-x-0 bottom-6 flex justify-center px-6">
+          <div className="rounded-lg bg-accent-soft px-4 py-2.5 text-[13px] text-accent shadow-lg">
+            🎉 {pokeBanner}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

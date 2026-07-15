@@ -18,4 +18,9 @@ setup, env vars, and local dev instructions for each half of the app.
 
 ## Schema
 
-[supabase/migrations/001_initial_schema.sql](supabase/migrations/001_initial_schema.sql)
+[supabase/migrations/](supabase/migrations/) — run in order:
+
+1. [001_initial_schema.sql](supabase/migrations/001_initial_schema.sql)
+2. [002_streaks_partner_milestones.sql](supabase/migrations/002_streaks_partner_milestones.sql)
+3. [003_push_notifications.sql](supabase/migrations/003_push_notifications.sql)
+4. [004_feedback.sql](supabase/migrations/004_feedback.sql)

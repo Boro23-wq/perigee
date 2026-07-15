@@ -225,6 +225,11 @@ export default function OnboardingPage() {
               />
             </Accordion>
 
+            <p className="text-xs text-muted-2">
+              Once you&apos;re in, connect a partner from the Partner tab or
+              turn on reminders from your profile — either one anytime.
+            </p>
+
             {error && <p className="text-[13px] text-danger">{error}</p>}
 
             <button

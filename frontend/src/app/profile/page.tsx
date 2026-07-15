@@ -9,7 +9,7 @@ import {
 } from "react";
 import Link from "next/link";
 import imageCompression from "browser-image-compression";
-import { Calendar, Camera } from "lucide-react";
+import { Bell, Calendar, Camera } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { Skeleton } from "@/components/Skeleton";
 import { Accordion } from "@/components/Accordion";
@@ -18,6 +18,12 @@ import {
   type MacroTargetValues,
 } from "@/components/MacroTargetFields";
 import { api } from "@/lib/api";
+import {
+  getCurrentPushSubscription,
+  pushSupported,
+  subscribeToPush,
+  unsubscribeFromPush,
+} from "@/lib/push";
 
 type Profile = {
   display_name: string | null;
@@ -53,6 +59,35 @@ export default function ProfilePage() {
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState("");
+
+  const [notificationsOn, setNotificationsOn] = useState(false);
+  const [notificationsBusy, setNotificationsBusy] = useState(false);
+  const [notificationsError, setNotificationsError] = useState("");
+
+  useEffect(() => {
+    if (!pushSupported()) return;
+    getCurrentPushSubscription().then((sub) => setNotificationsOn(!!sub));
+  }, []);
+
+  async function handleToggleNotifications() {
+    setNotificationsBusy(true);
+    setNotificationsError("");
+    try {
+      if (notificationsOn) {
+        await unsubscribeFromPush();
+        setNotificationsOn(false);
+      } else {
+        await subscribeToPush();
+        setNotificationsOn(true);
+      }
+    } catch (err) {
+      setNotificationsError(
+        err instanceof Error ? err.message : "Failed to update notifications",
+      );
+    } finally {
+      setNotificationsBusy(false);
+    }
+  }
 
   useEffect(() => {
     api.get("/api/me").then((data: Profile) => {
@@ -214,6 +249,45 @@ export default function ProfilePage() {
                 </div>
               </div>
             </section>
+
+            {pushSupported() && (
+              <section className="mt-7">
+                <h2 className="label-xs">Notifications</h2>
+                <div className="mt-3 flex items-center justify-between rounded-xl border border-border bg-surface p-4 shadow-soft">
+                  <div className="flex items-center gap-3">
+                    <Bell size={16} className="text-muted" />
+                    <div>
+                      <p className="text-[13px] font-medium">
+                        Reminders &amp; partner pokes
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted">
+                        Morning weigh-in and evening logging nudges.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleToggleNotifications}
+                    disabled={notificationsBusy}
+                    role="switch"
+                    aria-checked={notificationsOn}
+                    className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
+                      notificationsOn ? "bg-accent" : "bg-surface-2"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                        notificationsOn ? "translate-x-5" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
+                {notificationsError && (
+                  <p className="mt-2 text-[13px] text-danger">
+                    {notificationsError}
+                  </p>
+                )}
+              </section>
+            )}
 
             <section className="mt-7">
               <h2 className="label-xs">Details</h2>

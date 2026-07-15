@@ -34,6 +34,7 @@ type weeklyStats struct {
 	RemainingBudget int            `json:"remaining_budget"`
 	RemainingPerDay float64        `json:"remaining_per_day"`
 	WeightTrend     *weightSummary `json:"weight_trend"`
+	CurrentStreak   int            `json:"current_streak"`
 }
 
 const maxDailyBurnCredit = 500
@@ -184,6 +185,11 @@ func computeWeeklyStats(ctx context.Context, userID string) (*weeklyStats, error
 		weightTrend = &summary
 	}
 
+	streak, err := computeStreak(ctx, userID, timezone)
+	if err != nil {
+		streak = streakInfo{}
+	}
+
 	stats := &weeklyStats{
 		WeekStart:           weekStart.Format("2006-01-02"),
 		WeekEnd:             weekEnd.Format("2006-01-02"),
@@ -197,6 +203,7 @@ func computeWeeklyStats(ctx context.Context, userID string) (*weeklyStats, error
 		Banking:             clampInt(bankingRaw, -bankingDisplayCap, bankingDisplayCap),
 		RemainingBudget:     remainingBudget,
 		RemainingPerDay:     remainingPerDay,
+		CurrentStreak:       streak.CurrentStreak,
 		WeightTrend:         weightTrend,
 	}
 

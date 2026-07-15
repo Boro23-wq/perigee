@@ -12,6 +12,7 @@
   --accent-foreground: #ffffff;
   --accent-soft: #e8f1ff;
   --danger: #dc2626;
+  --warn: #f59e0b;
   --shadow-color: 220 20% 10%;
   --grid-line: rgba(13, 13, 15, 0.04);
 
@@ -56,6 +57,7 @@
     --accent-foreground: #051225;
     --accent-soft: #12233b;
     --danger: #f87171;
+    --warn: #fbbf24;
     --grid-line: rgba(255, 255, 255, 0.035);
 
     --badge-breakfast-bg: #451a03;
@@ -83,6 +85,7 @@
   --accent-foreground: #051225;
   --accent-soft: #12233b;
   --danger: #f87171;
+  --warn: #fbbf24;
   --grid-line: rgba(255, 255, 255, 0.035);
 
   --badge-breakfast-bg: #451a03;

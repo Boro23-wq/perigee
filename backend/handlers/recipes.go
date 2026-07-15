@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -36,6 +38,8 @@ type Recipe struct {
 	Fiber         float64  `json:"fiber"`
 	Servings      float64  `json:"servings"`
 	Ingredients   []string `json:"ingredients"`
+	Tags          []string `json:"tags"`
+	IsFavorite    bool     `json:"is_favorite"`
 	ShareToken    *string  `json:"share_token,omitempty"`
 	Mine          bool     `json:"mine"`
 	CreatedAt     string   `json:"created_at"`
@@ -50,6 +54,7 @@ type createRecipeRequest struct {
 	Fat           float64  `json:"fat"`
 	Fiber         float64  `json:"fiber"`
 	Ingredients   []string `json:"ingredients"`
+	Tags          []string `json:"tags"`
 }
 
 // validateRecipeRequest applies the same bounds to both create and update —
@@ -73,6 +78,9 @@ func validateRecipeRequest(c *gin.Context, req *createRecipeRequest) bool {
 	}
 	if req.Ingredients == nil {
 		req.Ingredients = []string{}
+	}
+	if req.Tags == nil {
+		req.Tags = []string{}
 	}
 	return true
 }
@@ -101,12 +109,12 @@ func CreateRecipe(c *gin.Context) {
 	var rawIngredients []byte
 	err = db.Pool.QueryRow(c.Request.Context(),
 		`INSERT INTO public.recipes
-		   (creator_id, name, total_calories, protein, carbs, fat, fiber, servings, ingredients)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		 RETURNING id, creator_id, name, total_calories, protein, carbs, fat, fiber, servings, ingredients, share_token, created_at`,
-		userID, req.Name, req.TotalCalories, req.Protein, req.Carbs, req.Fat, req.Fiber, req.Servings, string(ingredientsJSON),
+		   (creator_id, name, total_calories, protein, carbs, fat, fiber, servings, ingredients, tags)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		 RETURNING id, creator_id, name, total_calories, protein, carbs, fat, fiber, servings, ingredients, tags, share_token, created_at`,
+		userID, req.Name, req.TotalCalories, req.Protein, req.Carbs, req.Fat, req.Fiber, req.Servings, string(ingredientsJSON), req.Tags,
 	).Scan(&r.ID, &r.CreatorID, &r.Name, &r.TotalCalories, &r.Protein, &r.Carbs, &r.Fat, &r.Fiber,
-		&r.Servings, &rawIngredients, &r.ShareToken, &r.CreatedAt)
+		&r.Servings, &rawIngredients, &r.Tags, &r.ShareToken, &r.CreatedAt)
 
 	if err != nil {
 		log.Printf("CreateRecipe insert error: %v", err)
@@ -145,13 +153,13 @@ func UpdateRecipe(c *gin.Context) {
 	err = db.Pool.QueryRow(c.Request.Context(),
 		`UPDATE public.recipes
 		 SET name = $1, total_calories = $2, protein = $3, carbs = $4, fat = $5, fiber = $6,
-		     servings = $7, ingredients = $8
-		 WHERE id = $9 AND creator_id = $10
-		 RETURNING id, creator_id, name, total_calories, protein, carbs, fat, fiber, servings, ingredients, share_token, created_at`,
-		req.Name, req.TotalCalories, req.Protein, req.Carbs, req.Fat, req.Fiber, req.Servings, string(ingredientsJSON),
+		     servings = $7, ingredients = $8, tags = $9
+		 WHERE id = $10 AND creator_id = $11
+		 RETURNING id, creator_id, name, total_calories, protein, carbs, fat, fiber, servings, ingredients, tags, share_token, created_at`,
+		req.Name, req.TotalCalories, req.Protein, req.Carbs, req.Fat, req.Fiber, req.Servings, string(ingredientsJSON), req.Tags,
 		id, userID,
 	).Scan(&r.ID, &r.CreatorID, &r.Name, &r.TotalCalories, &r.Protein, &r.Carbs, &r.Fat, &r.Fiber,
-		&r.Servings, &rawIngredients, &r.ShareToken, &r.CreatedAt)
+		&r.Servings, &rawIngredients, &r.Tags, &r.ShareToken, &r.CreatedAt)
 
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "recipe not found"})
@@ -165,21 +173,38 @@ func UpdateRecipe(c *gin.Context) {
 
 // GetRecipes returns recipes the caller created, plus recipes shared to them
 // that they've accepted — one combined "my recipes" list for one-tap logging.
+// Optional ?q=, ?tag=, ?favorite=true narrow the list for the library view.
 func GetRecipes(c *gin.Context) {
 	userID := c.GetString("user_id")
+	q := c.Query("q")
+	tag := c.Query("tag")
+	favoriteOnly := c.Query("favorite") == "true"
 
-	rows, err := db.Pool.Query(c.Request.Context(),
-		`SELECT r.id, r.creator_id, r.name, r.total_calories, r.protein, r.carbs, r.fat, r.fiber,
-		        r.servings, r.ingredients, r.share_token, r.created_at, (r.creator_id = $1) AS mine
-		 FROM public.recipes r
-		 WHERE r.creator_id = $1
-		    OR r.id IN (
-		         SELECT recipe_id FROM public.recipe_shares
-		         WHERE shared_to = $1 AND status = 'accepted'
-		       )
-		 ORDER BY r.created_at DESC`,
-		userID,
-	)
+	query := `SELECT r.id, r.creator_id, r.name, r.total_calories, r.protein, r.carbs, r.fat, r.fiber,
+	        r.servings, r.ingredients, r.tags, r.share_token, r.created_at, (r.creator_id = $1) AS mine,
+	        EXISTS (SELECT 1 FROM public.recipe_favorites f WHERE f.user_id = $1 AND f.recipe_id = r.id) AS is_favorite
+	 FROM public.recipes r
+	 WHERE (r.creator_id = $1
+	    OR r.id IN (
+	         SELECT recipe_id FROM public.recipe_shares
+	         WHERE shared_to = $1 AND status = 'accepted'
+	       ))`
+	args := []any{userID}
+
+	if q != "" {
+		args = append(args, "%"+q+"%")
+		query += fmt.Sprintf(" AND r.name ILIKE $%d", len(args))
+	}
+	if tag != "" {
+		args = append(args, tag)
+		query += fmt.Sprintf(" AND $%d = ANY(r.tags)", len(args))
+	}
+	if favoriteOnly {
+		query += " AND EXISTS (SELECT 1 FROM public.recipe_favorites f2 WHERE f2.user_id = $1 AND f2.recipe_id = r.id)"
+	}
+	query += " ORDER BY r.created_at DESC"
+
+	rows, err := db.Pool.Query(c.Request.Context(), query, args...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load recipes"})
 		return
@@ -191,7 +216,7 @@ func GetRecipes(c *gin.Context) {
 		var r Recipe
 		var rawIngredients []byte
 		if err := rows.Scan(&r.ID, &r.CreatorID, &r.Name, &r.TotalCalories, &r.Protein, &r.Carbs,
-			&r.Fat, &r.Fiber, &r.Servings, &rawIngredients, &r.ShareToken, &r.CreatedAt, &r.Mine); err != nil {
+			&r.Fat, &r.Fiber, &r.Servings, &rawIngredients, &r.Tags, &r.ShareToken, &r.CreatedAt, &r.Mine, &r.IsFavorite); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read recipes"})
 			return
 		}
@@ -203,6 +228,66 @@ func GetRecipes(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"recipes": recipes})
+}
+
+// recipeVisibleTo checks the same visibility rule LogRecipeMeal uses: the
+// caller must have created the recipe or have an accepted share of it.
+func recipeVisibleTo(ctx context.Context, recipeID, userID string) (bool, error) {
+	var exists bool
+	err := db.Pool.QueryRow(ctx,
+		`SELECT EXISTS (
+		   SELECT 1 FROM public.recipes r
+		   WHERE r.id = $1 AND (
+		     r.creator_id = $2
+		     OR r.id IN (SELECT recipe_id FROM public.recipe_shares WHERE shared_to = $2 AND status = 'accepted')
+		   )
+		 )`,
+		recipeID, userID,
+	).Scan(&exists)
+	return exists, err
+}
+
+// FavoriteRecipe marks a recipe (the caller's own or one shared to them) as a
+// favorite for the caller specifically — favorites are per-user, not a
+// property of the recipe itself.
+func FavoriteRecipe(c *gin.Context) {
+	userID := c.GetString("user_id")
+	recipeID := c.Param("id")
+
+	visible, err := recipeVisibleTo(c.Request.Context(), recipeID, userID)
+	if err != nil || !visible {
+		c.JSON(http.StatusNotFound, gin.H{"error": "recipe not found"})
+		return
+	}
+
+	if _, err := db.Pool.Exec(c.Request.Context(),
+		`INSERT INTO public.recipe_favorites (user_id, recipe_id) VALUES ($1, $2)
+		 ON CONFLICT (user_id, recipe_id) DO NOTHING`,
+		userID, recipeID,
+	); err != nil {
+		log.Printf("FavoriteRecipe error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to favorite recipe"})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+// UnfavoriteRecipe removes the caller's favorite on a recipe.
+func UnfavoriteRecipe(c *gin.Context) {
+	userID := c.GetString("user_id")
+	recipeID := c.Param("id")
+
+	if _, err := db.Pool.Exec(c.Request.Context(),
+		`DELETE FROM public.recipe_favorites WHERE user_id = $1 AND recipe_id = $2`,
+		userID, recipeID,
+	); err != nil {
+		log.Printf("UnfavoriteRecipe error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to unfavorite recipe"})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }
 
 // GetSharedRecipe looks up a recipe by its public share token — any

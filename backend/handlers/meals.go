@@ -3,6 +3,7 @@ package handlers
 import (
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -234,6 +235,58 @@ func GetMeals(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"meals": meals, "totals": totals})
+}
+
+// GetMealsHistory returns a page of past meals older than `before`, newest
+// first, for the /history journal view — a cursor over food_logs rather than
+// a single day like GetMeals.
+func GetMealsHistory(c *gin.Context) {
+	userID := c.GetString("user_id")
+
+	before := c.DefaultQuery("before", time.Now().UTC().AddDate(0, 0, 1).Format("2006-01-02"))
+	if _, err := time.Parse("2006-01-02", before); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "before must be YYYY-MM-DD"})
+		return
+	}
+
+	limit := 30
+	if raw := c.Query("limit"); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil {
+			limit = v
+		}
+	}
+	limit = clampInt(limit, 1, 90)
+
+	rows, err := db.Pool.Query(c.Request.Context(),
+		`SELECT `+mealColumns+`
+		 FROM public.food_logs
+		 WHERE user_id = $1 AND date < $2
+		 ORDER BY date DESC, created_at DESC
+		 LIMIT $3`,
+		userID, before, limit+1,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load meal history"})
+		return
+	}
+	defer rows.Close()
+
+	meals := []Meal{}
+	for rows.Next() {
+		m, err := scanMeal(rows)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read meal history"})
+			return
+		}
+		meals = append(meals, m)
+	}
+
+	hasMore := len(meals) > limit
+	if hasMore {
+		meals = meals[:limit]
+	}
+
+	c.JSON(http.StatusOK, gin.H{"meals": meals, "has_more": hasMore})
 }
 
 type usual struct {
