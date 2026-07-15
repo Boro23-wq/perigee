@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Scale, UtensilsCrossed, Users, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Logo } from "@/components/Logo";
+import { GridBackground } from "@/components/GridBackground";
 
 const FEATURES = [
   {
@@ -39,19 +40,7 @@ export default async function Home() {
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage:
-            "linear-gradient(to right, var(--grid-line) 1px, transparent 1px), linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px)",
-          backgroundSize: "44px 44px",
-          maskImage:
-            "radial-gradient(ellipse 70% 55% at 50% 0%, black 0%, transparent 75%)",
-          WebkitMaskImage:
-            "radial-gradient(ellipse 70% 55% at 50% 0%, black 0%, transparent 75%)",
-        }}
-      />
+      <GridBackground maskEllipse="70% 55% at 50% 0%" />
       <div
         aria-hidden
         className="pointer-events-none absolute left-1/2 top-[-260px] h-[260px] w-[260px] -translate-x-1/2 rounded-full opacity-[0.1] blur-[90px] sm:h-[380px] sm:w-[380px]"
@@ -86,8 +75,8 @@ export default async function Home() {
             <span className="text-accent">Stay consistent.</span>
           </h1>
           <p className="mt-4 max-w-sm text-[15px] text-balance text-muted">
-            Weekly deficit, a real weight trend, and a recipe box, with
-            optional sharing if you&apos;ve got a partner.
+            Weekly deficit, a real weight trend, and a recipe box, with optional
+            sharing if you&apos;ve got a partner.
           </p>
           <div className="mt-8 flex gap-2">
             <Link
@@ -124,7 +113,7 @@ export default async function Home() {
 
       <footer className="relative border-t border-border px-6 py-6 text-center sm:px-8">
         <p className="text-xs text-muted-2">
-          Perigee, built for two people who wanted to stop guessing.
+          Perigee, built for people who wanted to stop guessing.
         </p>
       </footer>
     </div>

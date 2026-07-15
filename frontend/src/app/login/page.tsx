@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { PerigeeMark } from "@/components/Logo";
+import { GridBackground } from "@/components/GridBackground";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -36,17 +37,7 @@ export default function LoginPage() {
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-background px-6 py-12">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage:
-            "linear-gradient(to right, var(--grid-line) 1px, transparent 1px), linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px)",
-          backgroundSize: "44px 44px",
-          maskImage: "radial-gradient(ellipse 60% 50% at 50% 0%, black 0%, transparent 75%)",
-          WebkitMaskImage: "radial-gradient(ellipse 60% 50% at 50% 0%, black 0%, transparent 75%)",
-        }}
-      />
+      <GridBackground maskEllipse="60% 50% at 50% 0%" />
       <div
         aria-hidden
         className="pointer-events-none absolute left-1/2 -top-30 h-80 w-80 -translate-x-1/2 rounded-full opacity-10 blur-[100px]"

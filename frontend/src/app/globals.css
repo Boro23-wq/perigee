@@ -14,6 +14,17 @@
   --danger: #dc2626;
   --shadow-color: 220 20% 10%;
   --grid-line: rgba(13, 13, 15, 0.04);
+
+  --badge-breakfast-bg: #fef3c7;
+  --badge-breakfast-fg: #b45309;
+  --badge-lunch-bg: #dcfce7;
+  --badge-lunch-fg: #15803d;
+  --badge-dinner-bg: #ede9fe;
+  --badge-dinner-fg: #6d28d9;
+  --badge-snack-bg: #fce7f3;
+  --badge-snack-fg: #be185d;
+  --badge-drink-bg: #cffafe;
+  --badge-drink-fg: #0e7490;
 }
 
 @theme inline {
@@ -33,7 +44,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --background: #0a0a0b;
     --surface: #141416;
     --surface-2: #1b1c1f;
@@ -46,7 +57,44 @@
     --accent-soft: #12233b;
     --danger: #f87171;
     --grid-line: rgba(255, 255, 255, 0.035);
+
+    --badge-breakfast-bg: #451a03;
+    --badge-breakfast-fg: #fcd34d;
+    --badge-lunch-bg: #052e16;
+    --badge-lunch-fg: #86efac;
+    --badge-dinner-bg: #2e1065;
+    --badge-dinner-fg: #c4b5fd;
+    --badge-snack-bg: #500724;
+    --badge-snack-fg: #f9a8d4;
+    --badge-drink-bg: #083344;
+    --badge-drink-fg: #67e8f9;
   }
+}
+
+:root[data-theme="dark"] {
+  --background: #0a0a0b;
+  --surface: #141416;
+  --surface-2: #1b1c1f;
+  --foreground: #ededef;
+  --muted: #8b8d93;
+  --muted-2: #616367;
+  --border: #232326;
+  --accent: #4da3ff;
+  --accent-foreground: #051225;
+  --accent-soft: #12233b;
+  --danger: #f87171;
+  --grid-line: rgba(255, 255, 255, 0.035);
+
+  --badge-breakfast-bg: #451a03;
+  --badge-breakfast-fg: #fcd34d;
+  --badge-lunch-bg: #052e16;
+  --badge-lunch-fg: #86efac;
+  --badge-dinner-bg: #2e1065;
+  --badge-dinner-fg: #c4b5fd;
+  --badge-snack-bg: #500724;
+  --badge-snack-fg: #f9a8d4;
+  --badge-drink-bg: #083344;
+  --badge-drink-fg: #67e8f9;
 }
 
 * {
@@ -80,11 +128,17 @@ body {
 }
 
 @media (prefers-color-scheme: dark) {
-  .shadow-soft {
+  :root:not([data-theme="light"]) .shadow-soft {
     box-shadow:
       0 1px 2px hsl(var(--shadow-color) / 0.35),
       0 2px 6px hsl(var(--shadow-color) / 0.3);
   }
+}
+
+:root[data-theme="dark"] .shadow-soft {
+  box-shadow:
+    0 1px 2px hsl(var(--shadow-color) / 0.35),
+    0 2px 6px hsl(var(--shadow-color) / 0.3);
 }
 
 input[type="number"] {
@@ -95,6 +149,19 @@ input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
+}
+
+/* The native calendar-picker icon can't be recolored reliably across
+   browsers (Safari doesn't expose the WebKit pseudo-element at all, and
+   color-scheme support is inconsistent). We hide it and draw our own
+   themed icon on top instead — see the `date-input` wrapper pattern. */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
 }
 
 * {
@@ -138,4 +205,56 @@ input[type="number"]::-webkit-inner-spin-button {
 
 .animate-shared-in {
   animation: shared-in 1.8s ease-out;
+}
+
+button:not(:disabled),
+a,
+[role="button"],
+select,
+input[type="checkbox"],
+input[type="radio"] {
+  cursor: pointer;
+}
+
+@keyframes typing-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+.typing-dot {
+  animation: typing-bounce 1.2s ease-in-out infinite;
+}
+
+@property --mx {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: -9999px;
+}
+
+@property --my {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: -9999px;
+}
+
+.grid-glow {
+  background-image: linear-gradient(to right, var(--accent) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--accent) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(circle 90px at var(--mx) var(--my), black, transparent 70%);
+  -webkit-mask-image: radial-gradient(circle 90px at var(--mx) var(--my), black, transparent 70%);
+  filter: drop-shadow(0 0 4px var(--accent));
+  opacity: 0;
+  transition:
+    --mx 150ms ease-out,
+    --my 150ms ease-out,
+    opacity 400ms ease;
 }

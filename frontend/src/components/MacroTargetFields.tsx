@@ -22,8 +22,9 @@ export function MacroTargetFields({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-2">
-        Set daily gram targets for whichever macros you want to track — leave any
-        blank to skip it. They&apos;ll show as progress bars on your dashboard.
+        Set daily gram targets for whichever macros you want to track. You can
+        leave any blank to skip it. They&apos;ll show as progress bars on your
+        dashboard.
       </p>
       <div className="grid grid-cols-2 gap-3">
         {FIELDS.map(({ key, label }) => (

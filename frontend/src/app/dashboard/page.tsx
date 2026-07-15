@@ -9,6 +9,10 @@ import { api } from "@/lib/api";
 import { localDateString } from "@/lib/date";
 import { AppHeader } from "@/components/AppHeader";
 import { Skeleton } from "@/components/Skeleton";
+import { MealTypeBadge } from "@/components/MealTypeBadge";
+import { ConfidenceMeter } from "@/components/ConfidenceMeter";
+
+const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack", "drink"] as const;
 
 type Meal = {
   id: string;
@@ -20,6 +24,7 @@ type Meal = {
   protein: number;
   carbs: number;
   fat: number;
+  fiber: number;
   notes: string | null;
   ai_confidence: "low" | "medium" | "high" | null;
   created_at: string;
@@ -164,6 +169,17 @@ export default function DashboardPage() {
   const [newSharedIds, setNewSharedIds] = useState<Set<string>>(new Set());
   const [banner, setBanner] = useState<string | null>(null);
   const sharedCheckDone = useRef(false);
+
+  const [editingMealId, setEditingMealId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editMealType, setEditMealType] = useState("breakfast");
+  const [editCalories, setEditCalories] = useState("");
+  const [editProtein, setEditProtein] = useState("");
+  const [editCarbs, setEditCarbs] = useState("");
+  const [editFat, setEditFat] = useState("");
+  const [editFiber, setEditFiber] = useState(0);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
 
   const loadMeals = useCallback(async () => {
     const data = await api.get(`/api/meals?date=${localDateString()}`);
@@ -318,6 +334,47 @@ export default function DashboardPage() {
       await Promise.all([loadMeals(), loadStats()]);
     } catch {
       await Promise.all([loadMeals(), loadStats()]);
+    }
+  }
+
+  function startEdit(m: Meal) {
+    setOpenMenuId(null);
+    setEditingMealId(m.id);
+    setEditName(m.name);
+    setEditMealType(m.meal_type);
+    setEditCalories(String(m.calories));
+    setEditProtein(String(m.protein));
+    setEditCarbs(String(m.carbs));
+    setEditFat(String(m.fat));
+    setEditFiber(m.fiber);
+    setEditError("");
+  }
+
+  function cancelEdit() {
+    setEditingMealId(null);
+    setEditError("");
+  }
+
+  async function saveEdit(id: string) {
+    setEditSaving(true);
+    setEditError("");
+    try {
+      const updated: Meal = await api.patch(`/api/meals/${id}`, {
+        name: editName,
+        meal_type: editMealType,
+        calories: Number(editCalories),
+        protein: editProtein ? Number(editProtein) : 0,
+        carbs: editCarbs ? Number(editCarbs) : 0,
+        fat: editFat ? Number(editFat) : 0,
+        fiber: editFiber,
+      });
+      setMeals((prev) => prev?.map((m) => (m.id === id ? updated : m)) ?? null);
+      await loadStats();
+      setEditingMealId(null);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Failed to update meal");
+    } finally {
+      setEditSaving(false);
     }
   }
 
@@ -758,57 +815,138 @@ export default function DashboardPage() {
             return (
               <div
                 key={m.id}
-                className={`relative flex items-center justify-between rounded-xl border border-border bg-surface px-4 py-2.5 ${
+                className={`relative rounded-xl border border-border bg-surface px-4 py-2.5 ${
                   isNewShared ? "animate-shared-in" : ""
                 }`}
               >
-                <div>
-                  <p className="text-[13px] font-medium">{m.name}</p>
-                  <p className="text-xs text-muted">
-                    {m.calories} cal · {m.meal_type}
-                    {m.source === "photo" && m.ai_confidence && (
-                      <> · {m.ai_confidence} confidence</>
-                    )}
-                  </p>
-                  {(isShared || m.source === "shared") && (
-                    <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
-                      ✓ {m.source === "shared" ? "Shared with you" : `Shared with ${partnerName}`}
-                    </span>
-                  )}
-                </div>
-
-                <button
-                  onClick={() => setOpenMenuId((id) => (id === m.id ? null : m.id))}
-                  aria-label={`More actions for ${m.name}`}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-                >
-                  <MoreVertical size={16} />
-                </button>
-
-                {openMenuId === m.id && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-10"
-                      onClick={() => setOpenMenuId(null)}
+                {editingMealId === m.id ? (
+                  <div className="flex flex-col gap-2">
+                    <input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      placeholder="Name"
+                      className="rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
                     />
-                    <div className="absolute right-4 top-11 z-20 w-52 overflow-hidden rounded-lg border border-border bg-surface shadow-soft">
-                      {partnerName && !isShared && m.source !== "shared" && (
-                        <button
-                          onClick={() => handleShare(m.id)}
-                          disabled={sharingId === m.id}
-                          className="flex w-full items-center px-3 py-2 text-left text-[13px] text-muted transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-60"
-                        >
-                          {sharingId === m.id ? "Sharing…" : `Share with ${partnerName}`}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleDelete(m.id)}
-                        className="flex w-full items-center px-3 py-2 text-left text-[13px] text-danger transition-colors hover:bg-surface-2"
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                      <select
+                        value={editMealType}
+                        onChange={(e) => setEditMealType(e.target.value)}
+                        className="rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
                       >
-                        Delete
+                        {MEAL_TYPES.map((t) => (
+                          <option key={t} value={t}>
+                            {t[0].toUpperCase() + t.slice(1)}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        min={0}
+                        value={editCalories}
+                        onChange={(e) => setEditCalories(e.target.value)}
+                        placeholder="Cal"
+                        className="rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        value={editProtein}
+                        onChange={(e) => setEditProtein(e.target.value)}
+                        placeholder="Protein"
+                        className="rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        value={editCarbs}
+                        onChange={(e) => setEditCarbs(e.target.value)}
+                        placeholder="Carbs"
+                        className="rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        value={editFat}
+                        onChange={(e) => setEditFat(e.target.value)}
+                        placeholder="Fat"
+                        className="rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-[13px] outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                      />
+                    </div>
+                    {editError && <p className="text-[13px] text-danger">{editError}</p>}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => saveEdit(m.id)}
+                        disabled={editSaving || !editName.trim() || !editCalories}
+                        className="rounded-lg bg-accent px-3 py-1.5 text-[13px] font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+                      >
+                        {editSaving ? "Saving…" : "Save"}
+                      </button>
+                      <button
+                        onClick={cancelEdit}
+                        className="rounded-lg border border-border px-3 py-1.5 text-[13px] font-medium transition-colors hover:border-accent"
+                      >
+                        Cancel
                       </button>
                     </div>
-                  </>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[13px] font-medium">{m.name}</p>
+                      <div className="mt-1 flex items-center gap-1.5 text-xs text-muted">
+                        <span>{m.calories} cal</span>
+                        <MealTypeBadge type={m.meal_type} />
+                        {m.source === "photo" && m.ai_confidence && (
+                          <ConfidenceMeter confidence={m.ai_confidence} />
+                        )}
+                      </div>
+                      {(isShared || m.source === "shared") && (
+                        <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
+                          ✓ {m.source === "shared" ? "Shared with you" : `Shared with ${partnerName}`}
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => setOpenMenuId((id) => (id === m.id ? null : m.id))}
+                      aria-label={`More actions for ${m.name}`}
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                    >
+                      <MoreVertical size={16} />
+                    </button>
+
+                    {openMenuId === m.id && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-10"
+                          onClick={() => setOpenMenuId(null)}
+                        />
+                        <div className="absolute right-4 top-11 z-20 w-52 overflow-hidden rounded-lg border border-border bg-surface shadow-soft">
+                          <button
+                            onClick={() => startEdit(m)}
+                            className="flex w-full items-center px-3 py-2 text-left text-[13px] text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                          >
+                            Edit
+                          </button>
+                          {partnerName && !isShared && m.source !== "shared" && (
+                            <button
+                              onClick={() => handleShare(m.id)}
+                              disabled={sharingId === m.id}
+                              className="flex w-full items-center px-3 py-2 text-left text-[13px] text-muted transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-60"
+                            >
+                              {sharingId === m.id ? "Sharing…" : `Share with ${partnerName}`}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDelete(m.id)}
+                            className="flex w-full items-center px-3 py-2 text-left text-[13px] text-danger transition-colors hover:bg-surface-2"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
             );
@@ -818,7 +956,7 @@ export default function DashboardPage() {
 
       {banner && (
         <div className="fixed inset-x-0 bottom-6 flex justify-center px-6">
-          <div className="flex items-center gap-2 rounded-lg bg-foreground px-4 py-2.5 text-[13px] text-background shadow-lg">
+          <div className="flex items-center gap-2 rounded-lg bg-accent-soft px-4 py-2.5 text-[13px] text-accent shadow-lg">
             🎉 {banner}
           </div>
         </div>

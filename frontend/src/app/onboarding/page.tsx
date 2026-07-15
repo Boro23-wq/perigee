@@ -2,11 +2,15 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { Calendar } from "lucide-react";
 import { api } from "@/lib/api";
 import { localDateString } from "@/lib/date";
 import { PerigeeMark } from "@/components/Logo";
 import { Accordion } from "@/components/Accordion";
-import { MacroTargetFields, type MacroTargetValues } from "@/components/MacroTargetFields";
+import {
+  MacroTargetFields,
+  type MacroTargetValues,
+} from "@/components/MacroTargetFields";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -188,25 +192,36 @@ export default function OnboardingPage() {
                 >
                   Goal date
                 </label>
-                <input
-                  id="goalDate"
-                  type="date"
-                  value={goalDate}
-                  onChange={(e) => setGoalDate(e.target.value)}
-                  className="rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
-                />
+                <div className="relative">
+                  <input
+                    id="goalDate"
+                    type="date"
+                    value={goalDate}
+                    onChange={(e) => setGoalDate(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 pr-9 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                  />
+                  <Calendar
+                    size={13}
+                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted"
+                  />
+                </div>
               </div>
             </div>
 
             <p className="text-xs text-muted-2">
-              Goal fields are optional. You can add or change these anytime
-              from your profile.
+              Goal fields are optional. You can add or change these anytime from
+              your profile.
             </p>
 
-            <Accordion title="Advanced: macro targets" subtitle="Optional — protein, carbs, fat, fiber">
+            <Accordion
+              title="Advanced: macro targets"
+              subtitle="Protein, carbs, fat, fiber (optional)"
+            >
               <MacroTargetFields
                 values={macros}
-                onChange={(key, value) => setMacros((m) => ({ ...m, [key]: value }))}
+                onChange={(key, value) =>
+                  setMacros((m) => ({ ...m, [key]: value }))
+                }
               />
             </Accordion>
 

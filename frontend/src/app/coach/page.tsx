@@ -9,6 +9,7 @@ type Message = {
   role: "user" | "assistant";
   content: string;
   created_at?: string;
+  animate?: boolean;
 };
 
 const STARTERS = [
@@ -16,6 +17,34 @@ const STARTERS = [
   "Is my current trend actually on pace?",
   "What's a realistic goal for the next 3 months?",
 ];
+
+function TypewriterText({ text, onTick }: { text: string; onTick: () => void }) {
+  const [shown, setShown] = useState("");
+
+  useEffect(() => {
+    let i = 0;
+    const id = setInterval(() => {
+      i += 3;
+      setShown(text.slice(0, i));
+      onTick();
+      if (i >= text.length) clearInterval(id);
+    }, 15);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text]);
+
+  return <>{shown}</>;
+}
+
+function TypingBubble() {
+  return (
+    <div className="flex items-center gap-1 self-start rounded-2xl bg-surface-2 px-4 py-3">
+      <span className="typing-dot h-1.5 w-1.5 rounded-full bg-muted-2" />
+      <span className="typing-dot h-1.5 w-1.5 rounded-full bg-muted-2" style={{ animationDelay: "0.15s" }} />
+      <span className="typing-dot h-1.5 w-1.5 rounded-full bg-muted-2" style={{ animationDelay: "0.3s" }} />
+    </div>
+  );
+}
 
 export default function CoachPage() {
   const [messages, setMessages] = useState<Message[] | null>(null);
@@ -35,6 +64,10 @@ export default function CoachPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sending]);
 
+  function scrollToBottom() {
+    bottomRef.current?.scrollIntoView({ behavior: "auto" });
+  }
+
   async function sendMessage(content: string) {
     if (!content.trim() || sending) return;
     setError("");
@@ -44,7 +77,10 @@ export default function CoachPage() {
 
     try {
       const reply = await api.post("/api/coach/messages", { content });
-      setMessages((prev) => [...(prev ?? []), { role: "assistant", content: reply.content }]);
+      setMessages((prev) => [
+        ...(prev ?? []),
+        { role: "assistant", content: reply.content, animate: true },
+      ]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Coach is unavailable right now");
     } finally {
@@ -61,15 +97,15 @@ export default function CoachPage() {
     <div className="flex min-h-screen flex-col">
       <AppHeader />
 
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-6 pb-6 pt-6 sm:px-8">
+      <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col px-6 pb-6 pt-6 sm:px-8">
         <h1 className="text-xl font-semibold tracking-tight">Coach</h1>
         <p className="mt-1 text-[13px] text-muted">
           Grounded in your real numbers: weight trend, calorie budget, and goal. Advisory
           only: it can&apos;t change settings or log anything for you.
         </p>
 
-        <div className="mt-5 flex-1 rounded-xl border border-border bg-surface shadow-soft">
-          <div className="flex h-125 flex-col gap-3 overflow-y-auto p-4">
+        <div className="mt-5 flex min-h-0 flex-1 flex-col rounded-xl border border-border bg-surface shadow-soft">
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
             {!messages && (
               <>
                 <Skeleton className="h-10 w-2/3 rounded-2xl" />
@@ -106,15 +142,15 @@ export default function CoachPage() {
                     : "self-start bg-surface-2 text-foreground"
                 }`}
               >
-                {m.content}
+                {m.role === "assistant" && m.animate ? (
+                  <TypewriterText text={m.content} onTick={scrollToBottom} />
+                ) : (
+                  m.content
+                )}
               </div>
             ))}
 
-            {sending && (
-              <div className="self-start rounded-2xl bg-surface-2 px-4 py-2.5 text-[13px] text-muted">
-                Thinking…
-              </div>
-            )}
+            {sending && <TypingBubble />}
 
             <div ref={bottomRef} />
           </div>

@@ -7,6 +7,8 @@ import { localDateString } from "@/lib/date";
 import { AppHeader } from "@/components/AppHeader";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { Skeleton } from "@/components/Skeleton";
+import { MealTypeBadge } from "@/components/MealTypeBadge";
+import { ConfidenceMeter } from "@/components/ConfidenceMeter";
 
 type Usual = {
   name: string;
@@ -54,17 +56,6 @@ function currentMealType() {
   if (hour >= 11 && hour < 15) return "lunch";
   if (hour >= 15 && hour < 21) return "dinner";
   return "snack";
-}
-
-function confidenceStyle(confidence: PhotoMeal["ai_confidence"]) {
-  switch (confidence) {
-    case "high":
-      return "text-accent";
-    case "medium":
-      return "text-muted";
-    default:
-      return "text-danger";
-  }
 }
 
 export default function LogPage() {
@@ -337,9 +328,7 @@ export default function LogPage() {
               <div className="mt-3 rounded-xl border border-border bg-surface p-4 shadow-soft">
                 <div className="flex items-center justify-between">
                   <p className="text-[13px] font-medium">{photoResult.name}</p>
-                  <span className={`label-xs ${confidenceStyle(photoResult.ai_confidence)}`}>
-                    {photoResult.ai_confidence ?? "unknown"} confidence
-                  </span>
+                  <ConfidenceMeter confidence={photoResult.ai_confidence} />
                 </div>
                 <p className="mt-3 text-2xl font-semibold tabular-nums tracking-tight">
                   {adjustedCalories} cal
@@ -481,11 +470,12 @@ export default function LogPage() {
                 <button
                   key={i}
                   onClick={() => logUsual(u)}
-                  className="flex flex-col items-start gap-0.5 rounded-xl border border-border bg-surface px-3 py-2.5 text-left shadow-soft transition-colors hover:border-accent"
+                  className="flex flex-col items-start justify-between gap-0.5 rounded-xl border border-border bg-surface px-3 py-2.5 text-left shadow-soft transition-colors hover:border-accent"
                 >
                   <span className="text-[13px] font-medium">{u.name}</span>
-                  <span className="text-xs text-muted">
-                    {u.calories} cal · {u.meal_type}
+                  <span className="flex items-center gap-1.5 text-xs text-muted">
+                    {u.calories} cal
+                    <MealTypeBadge type={u.meal_type} />
                   </span>
                 </button>
               ))}
@@ -612,11 +602,11 @@ export default function LogPage() {
 
       {toast && (
         <div className="fixed inset-x-0 bottom-6 flex justify-center px-6">
-          <div className="flex items-center gap-4 rounded-lg bg-foreground px-4 py-2.5 text-background shadow-lg">
+          <div className="flex items-center gap-4 rounded-lg bg-accent-soft px-4 py-2.5 text-accent shadow-lg">
             <span className="text-[13px]">{toast.message}</span>
             <button
               onClick={toast.onUndo}
-              className="text-[13px] font-medium text-accent transition-opacity hover:opacity-70"
+              className="text-[13px] font-medium underline underline-offset-2 transition-opacity hover:opacity-70"
             >
               Undo
             </button>

@@ -312,6 +312,62 @@ func GetUsuals(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"usuals": usuals})
 }
 
+type updateMealRequest struct {
+	Name     string  `json:"name"`
+	MealType string  `json:"meal_type"`
+	Calories int     `json:"calories"`
+	Protein  float64 `json:"protein"`
+	Carbs    float64 `json:"carbs"`
+	Fat      float64 `json:"fat"`
+	Fiber    float64 `json:"fiber"`
+}
+
+// UpdateMeal lets the owner correct a logged meal's name, meal_type, and
+// macros after the fact — the AI/barcode estimate is a starting point, not
+// gospel, and the user should be able to fix it without deleting/relogging.
+func UpdateMeal(c *gin.Context) {
+	userID := c.GetString("user_id")
+	id := c.Param("id")
+
+	var req updateMealRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	if !validMealTypes[req.MealType] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid meal_type"})
+		return
+	}
+	if req.Name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
+		return
+	}
+	if req.Calories < 0 || req.Calories > 10000 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "calories must be between 0 and 10000"})
+		return
+	}
+	if req.Protein < 0 || req.Carbs < 0 || req.Fat < 0 || req.Fiber < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "macros cannot be negative"})
+		return
+	}
+
+	row := db.Pool.QueryRow(c.Request.Context(),
+		`UPDATE public.food_logs
+		 SET name = $1, meal_type = $2, calories = $3, protein = $4, carbs = $5, fat = $6, fiber = $7, user_adjusted = true
+		 WHERE id = $8 AND user_id = $9
+		 RETURNING `+mealColumns,
+		req.Name, req.MealType, req.Calories, req.Protein, req.Carbs, req.Fat, req.Fiber, id, userID,
+	)
+	m, err := scanMeal(row)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "meal not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, m)
+}
+
 // DeleteMeal removes a food_logs row, scoped to the authenticated user so
 // one user can never delete another's entry.
 func DeleteMeal(c *gin.Context) {

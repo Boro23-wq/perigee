@@ -1,13 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
 import Link from "next/link";
 import imageCompression from "browser-image-compression";
-import { Camera } from "lucide-react";
+import { Calendar, Camera } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { Skeleton } from "@/components/Skeleton";
 import { Accordion } from "@/components/Accordion";
-import { MacroTargetFields, type MacroTargetValues } from "@/components/MacroTargetFields";
+import {
+  MacroTargetFields,
+  type MacroTargetValues,
+} from "@/components/MacroTargetFields";
 import { api } from "@/lib/api";
 
 type Profile = {
@@ -52,10 +61,13 @@ export default function ProfilePage() {
       setFeet(data.height_in ? String(Math.floor(data.height_in / 12)) : "");
       setInches(data.height_in ? String(Math.round(data.height_in % 12)) : "");
       setCalorieBudget(String(data.daily_calorie_budget));
-      setGoalWeight(data.weight_goal_lbs != null ? String(data.weight_goal_lbs) : "");
+      setGoalWeight(
+        data.weight_goal_lbs != null ? String(data.weight_goal_lbs) : "",
+      );
       setGoalDate(data.goal_date ?? "");
       setMacros({
-        protein: data.protein_target_g != null ? String(data.protein_target_g) : "",
+        protein:
+          data.protein_target_g != null ? String(data.protein_target_g) : "",
         carbs: data.carbs_target_g != null ? String(data.carbs_target_g) : "",
         fat: data.fat_target_g != null ? String(data.fat_target_g) : "",
         fiber: data.fiber_target_g != null ? String(data.fiber_target_g) : "",
@@ -93,7 +105,9 @@ export default function ProfilePage() {
       const updated = await api.patch("/api/me", { avatar_path: path });
       setProfile(updated);
     } catch (err) {
-      setAvatarError(err instanceof Error ? err.message : "Failed to upload photo");
+      setAvatarError(
+        err instanceof Error ? err.message : "Failed to upload photo",
+      );
     } finally {
       setAvatarUploading(false);
     }
@@ -107,7 +121,9 @@ export default function ProfilePage() {
 
     try {
       const heightIn =
-        feet || inches ? Number(feet || 0) * 12 + Number(inches || 0) : undefined;
+        feet || inches
+          ? Number(feet || 0) * 12 + Number(inches || 0)
+          : undefined;
 
       const updated = await api.patch("/api/me", {
         display_name: displayName || undefined,
@@ -191,81 +207,86 @@ export default function ProfilePage() {
                     {avatarUploading ? "Uploading…" : "Change photo"}
                   </button>
                   {avatarError && (
-                    <p className="mt-1 text-[13px] text-danger">{avatarError}</p>
+                    <p className="mt-1 text-[13px] text-danger">
+                      {avatarError}
+                    </p>
                   )}
                 </div>
               </div>
             </section>
 
-            <section className="mt-7 max-w-md">
+            <section className="mt-7">
               <h2 className="label-xs">Details</h2>
-              <form onSubmit={handleSubmit} className="mt-3 flex flex-col gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label
-                    htmlFor="displayName"
-                    className="text-[11px] font-medium uppercase tracking-wide text-muted"
-                  >
-                    Name
-                  </label>
-                  <input
-                    id="displayName"
-                    type="text"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    className="rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
-                  />
-                </div>
+              <form
+                onSubmit={handleSubmit}
+                className="mt-3 flex flex-col gap-4"
+              >
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="flex flex-col gap-1.5 sm:col-span-2">
+                    <label
+                      htmlFor="displayName"
+                      className="text-[11px] font-medium uppercase tracking-wide text-muted"
+                    >
+                      Name
+                    </label>
+                    <input
+                      id="displayName"
+                      type="text"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                    />
+                  </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-medium uppercase tracking-wide text-muted">
-                    Height
-                  </label>
-                  <div className="flex gap-2">
-                    <div className="flex flex-1 items-center gap-1.5">
-                      <input
-                        type="number"
-                        min={0}
-                        max={8}
-                        value={feet}
-                        onChange={(e) => setFeet(e.target.value)}
-                        className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
-                      />
-                      <span className="text-[13px] text-muted">ft</span>
-                    </div>
-                    <div className="flex flex-1 items-center gap-1.5">
-                      <input
-                        type="number"
-                        min={0}
-                        max={11}
-                        value={inches}
-                        onChange={(e) => setInches(e.target.value)}
-                        className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
-                      />
-                      <span className="text-[13px] text-muted">in</span>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[11px] font-medium uppercase tracking-wide text-muted">
+                      Height
+                    </label>
+                    <div className="flex gap-2">
+                      <div className="flex flex-1 items-center gap-1.5">
+                        <input
+                          type="number"
+                          min={0}
+                          max={8}
+                          value={feet}
+                          onChange={(e) => setFeet(e.target.value)}
+                          className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                        />
+                        <span className="text-[13px] text-muted">ft</span>
+                      </div>
+                      <div className="flex flex-1 items-center gap-1.5">
+                        <input
+                          type="number"
+                          min={0}
+                          max={11}
+                          value={inches}
+                          onChange={(e) => setInches(e.target.value)}
+                          className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                        />
+                        <span className="text-[13px] text-muted">in</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label
-                    htmlFor="calorieBudget"
-                    className="text-[11px] font-medium uppercase tracking-wide text-muted"
-                  >
-                    Daily calorie budget
-                  </label>
-                  <input
-                    id="calorieBudget"
-                    type="number"
-                    min={800}
-                    max={10000}
-                    value={calorieBudget}
-                    onChange={(e) => setCalorieBudget(e.target.value)}
-                    className="rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
-                  />
-                </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label
+                      htmlFor="calorieBudget"
+                      className="text-[11px] font-medium uppercase tracking-wide text-muted"
+                    >
+                      Daily calorie budget
+                    </label>
+                    <input
+                      id="calorieBudget"
+                      type="number"
+                      min={800}
+                      max={10000}
+                      value={calorieBudget}
+                      onChange={(e) => setCalorieBudget(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                    />
+                  </div>
 
-                <div className="flex gap-2">
-                  <div className="flex flex-1 flex-col gap-1.5">
+                  <div className="flex flex-col gap-1.5">
                     <label
                       htmlFor="goalWeight"
                       className="text-[11px] font-medium uppercase tracking-wide text-muted"
@@ -279,23 +300,30 @@ export default function ProfilePage() {
                       step="0.1"
                       value={goalWeight}
                       onChange={(e) => setGoalWeight(e.target.value)}
-                      className="rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                      className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
                     />
                   </div>
-                  <div className="flex flex-1 flex-col gap-1.5">
+
+                  <div className="flex flex-col gap-1.5">
                     <label
                       htmlFor="goalDate"
                       className="text-[11px] font-medium uppercase tracking-wide text-muted"
                     >
                       Goal date
                     </label>
-                    <input
-                      id="goalDate"
-                      type="date"
-                      value={goalDate}
-                      onChange={(e) => setGoalDate(e.target.value)}
-                      className="rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
-                    />
+                    <div className="relative">
+                      <input
+                        id="goalDate"
+                        type="date"
+                        value={goalDate}
+                        onChange={(e) => setGoalDate(e.target.value)}
+                        className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 pr-9 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                      />
+                      <Calendar
+                        size={13}
+                        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -307,10 +335,15 @@ export default function ProfilePage() {
                   .
                 </p>
 
-                <Accordion title="Advanced: macro targets" subtitle="Optional — protein, carbs, fat, fiber">
+                <Accordion
+                  title="Advanced: macro targets"
+                  subtitle="Protein, carbs, fat, fiber (optional)"
+                >
                   <MacroTargetFields
                     values={macros}
-                    onChange={(key, value) => setMacros((m) => ({ ...m, [key]: value }))}
+                    onChange={(key, value) =>
+                      setMacros((m) => ({ ...m, [key]: value }))
+                    }
                   />
                 </Accordion>
 

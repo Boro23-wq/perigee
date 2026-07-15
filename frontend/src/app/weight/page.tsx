@@ -170,16 +170,14 @@ export default function WeightPage() {
             </div>
           )}
 
-        <div className="mt-5 flex items-end justify-between">
-          <div>
-            <h2 className="label-xs">Trend</h2>
-            <p className="mt-1 max-w-md text-[13px] text-muted">
-              Daily weigh-ins (dots) with a smoothed trend line. Your weight
-              swings a few pounds a day from water and food, not fat. The
-              trend line is what actually matters.
-            </p>
-          </div>
-          <div className="flex shrink-0 gap-0.5 rounded-lg border border-border p-0.5">
+        <div className="mt-5">
+          <h2 className="label-xs">Trend</h2>
+          <p className="mt-1 text-[13px] text-muted">
+            Daily weigh-ins (dots) with a smoothed trend line. Your weight
+            swings a few pounds a day from water and food, not fat. The
+            trend line is what actually matters.
+          </p>
+          <div className="mt-2 ml-auto flex w-fit gap-0.5 rounded-lg border border-border p-0.5">
             {RANGES.map((r) => (
               <button
                 key={r.value}

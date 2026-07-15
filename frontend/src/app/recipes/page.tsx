@@ -404,7 +404,7 @@ export default function RecipesPage() {
 
       {toast && (
         <div className="fixed inset-x-0 bottom-6 flex justify-center px-6">
-          <div className="rounded-lg bg-foreground px-4 py-2.5 text-[13px] text-background shadow-lg">
+          <div className="rounded-lg bg-accent-soft px-4 py-2.5 text-[13px] text-accent shadow-lg">
             {toast.message}
           </div>
         </div>
