@@ -37,6 +37,7 @@ type Meal struct {
 	Protein      float64  `json:"protein"`
 	Carbs        float64  `json:"carbs"`
 	Fat          float64  `json:"fat"`
+	Fiber        float64  `json:"fiber"`
 	Notes        *string  `json:"notes"`
 	PhotoPath    *string  `json:"photo_path"`
 	DetectedFood *string  `json:"detected_food"`
@@ -46,7 +47,7 @@ type Meal struct {
 	CreatedAt    string   `json:"created_at"`
 }
 
-const mealColumns = `id, date, meal_type, source, name, calories, protein, carbs, fat, notes,
+const mealColumns = `id, date, meal_type, source, name, calories, protein, carbs, fat, fiber, notes,
 	photo_path, detected_food, ai_confidence, user_adjusted, serving_grams, created_at`
 
 func scanMeal(row interface {
@@ -54,7 +55,7 @@ func scanMeal(row interface {
 }) (Meal, error) {
 	var m Meal
 	err := row.Scan(&m.ID, &m.Date, &m.MealType, &m.Source, &m.Name, &m.Calories,
-		&m.Protein, &m.Carbs, &m.Fat, &m.Notes,
+		&m.Protein, &m.Carbs, &m.Fat, &m.Fiber, &m.Notes,
 		&m.PhotoPath, &m.DetectedFood, &m.AIConfidence, &m.UserAdjusted, &m.ServingGrams, &m.CreatedAt)
 	return m, err
 }
@@ -68,6 +69,7 @@ type logMealRequest struct {
 	Protein  float64 `json:"protein"`
 	Carbs    float64 `json:"carbs"`
 	Fat      float64 `json:"fat"`
+	Fiber    float64 `json:"fiber"`
 	Notes    *string `json:"notes"`
 }
 
@@ -111,18 +113,18 @@ func LogMeal(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "calories must be between 0 and 10000"})
 		return
 	}
-	if req.Protein < 0 || req.Carbs < 0 || req.Fat < 0 {
+	if req.Protein < 0 || req.Carbs < 0 || req.Fat < 0 || req.Fiber < 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "macros cannot be negative"})
 		return
 	}
 
 	row := db.Pool.QueryRow(c.Request.Context(),
 		`INSERT INTO public.food_logs
-		   (user_id, date, meal_type, source, name, calories, protein, carbs, fat, notes)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		   (user_id, date, meal_type, source, name, calories, protein, carbs, fat, fiber, notes)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		 RETURNING `+mealColumns,
 		userID, req.Date, req.MealType, req.Source, req.Name, req.Calories,
-		req.Protein, req.Carbs, req.Fat, req.Notes,
+		req.Protein, req.Carbs, req.Fat, req.Fiber, req.Notes,
 	)
 	m, err := scanMeal(row)
 
@@ -156,12 +158,12 @@ func ShareMeal(c *gin.Context) {
 
 	var date, mealType, name string
 	var calories int
-	var protein, carbs, fat float64
+	var protein, carbs, fat, fiber float64
 	err = db.Pool.QueryRow(c.Request.Context(),
-		`SELECT date, meal_type, name, calories, protein, carbs, fat
+		`SELECT date, meal_type, name, calories, protein, carbs, fat, fiber
 		 FROM public.food_logs WHERE id = $1 AND user_id = $2`,
 		mealID, userID,
-	).Scan(&date, &mealType, &name, &calories, &protein, &carbs, &fat)
+	).Scan(&date, &mealType, &name, &calories, &protein, &carbs, &fat, &fiber)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "meal not found"})
 		return
@@ -169,10 +171,10 @@ func ShareMeal(c *gin.Context) {
 
 	row := db.Pool.QueryRow(c.Request.Context(),
 		`INSERT INTO public.food_logs
-		   (user_id, date, meal_type, source, name, calories, protein, carbs, fat)
-		 VALUES ($1, $2, $3, 'shared', $4, $5, $6, $7, $8)
+		   (user_id, date, meal_type, source, name, calories, protein, carbs, fat, fiber)
+		 VALUES ($1, $2, $3, 'shared', $4, $5, $6, $7, $8, $9)
 		 RETURNING `+mealColumns,
-		partnerID, date, mealType, name, calories, protein, carbs, fat,
+		partnerID, date, mealType, name, calories, protein, carbs, fat, fiber,
 	)
 	m, err := scanMeal(row)
 	if err != nil {
@@ -189,6 +191,7 @@ type dayTotals struct {
 	Protein  float64 `json:"protein"`
 	Carbs    float64 `json:"carbs"`
 	Fat      float64 `json:"fat"`
+	Fiber    float64 `json:"fiber"`
 }
 
 // GetMeals returns a day's meals plus totals.
@@ -227,6 +230,7 @@ func GetMeals(c *gin.Context) {
 		totals.Protein += m.Protein
 		totals.Carbs += m.Carbs
 		totals.Fat += m.Fat
+		totals.Fiber += m.Fiber
 	}
 
 	c.JSON(http.StatusOK, gin.H{"meals": meals, "totals": totals})
@@ -239,6 +243,7 @@ type usual struct {
 	Protein  float64 `json:"protein"`
 	Carbs    float64 `json:"carbs"`
 	Fat      float64 `json:"fat"`
+	Fiber    float64 `json:"fiber"`
 	Times    int     `json:"times"`
 	Last     string  `json:"last"`
 }
@@ -280,10 +285,10 @@ func GetUsuals(c *gin.Context) {
 	current := currentMealType(loc)
 
 	rows, err := db.Pool.Query(c.Request.Context(),
-		`SELECT name, meal_type, calories, protein, carbs, fat, COUNT(*) AS times, MAX(date) AS last
+		`SELECT name, meal_type, calories, protein, carbs, fat, fiber, COUNT(*) AS times, MAX(date) AS last
 		 FROM public.food_logs
 		 WHERE user_id = $1 AND source <> 'recipe' AND date > CURRENT_DATE - 30
-		 GROUP BY name, meal_type, calories, protein, carbs, fat
+		 GROUP BY name, meal_type, calories, protein, carbs, fat, fiber
 		 ORDER BY (meal_type = $2) DESC, times DESC, last DESC
 		 LIMIT 8`,
 		userID, current,
@@ -297,7 +302,7 @@ func GetUsuals(c *gin.Context) {
 	usuals := []usual{}
 	for rows.Next() {
 		var u usual
-		if err := rows.Scan(&u.Name, &u.MealType, &u.Calories, &u.Protein, &u.Carbs, &u.Fat, &u.Times, &u.Last); err != nil {
+		if err := rows.Scan(&u.Name, &u.MealType, &u.Calories, &u.Protein, &u.Carbs, &u.Fat, &u.Fiber, &u.Times, &u.Last); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read usuals"})
 			return
 		}

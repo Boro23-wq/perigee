@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import Link from "next/link";
-import { Logo } from "@/components/Logo";
+import { AppHeader } from "@/components/AppHeader";
 import { Skeleton } from "@/components/Skeleton";
 import { api } from "@/lib/api";
 
@@ -60,17 +59,7 @@ export default function CoachPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-b border-border">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4 sm:px-8">
-          <Logo />
-          <Link
-            href="/dashboard"
-            className="text-[13px] text-muted hover:text-foreground transition-colors"
-          >
-            Dashboard
-          </Link>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-6 pb-6 pt-6 sm:px-8">
         <h1 className="text-xl font-semibold tracking-tight">Coach</h1>

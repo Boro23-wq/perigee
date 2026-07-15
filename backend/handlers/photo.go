@@ -138,6 +138,7 @@ func AnalyzePhoto(c *gin.Context) {
 	protein := estimate.Protein
 	carbs := estimate.Carbs
 	fat := estimate.Fat
+	fiber := estimate.Fiber
 	if protein < 0 {
 		protein = 0
 	}
@@ -147,14 +148,17 @@ func AnalyzePhoto(c *gin.Context) {
 	if fat < 0 {
 		fat = 0
 	}
+	if fiber < 0 {
+		fiber = 0
+	}
 
 	row := db.Pool.QueryRow(c.Request.Context(),
 		`INSERT INTO public.food_logs
-		   (user_id, date, meal_type, source, name, calories, protein, carbs, fat,
+		   (user_id, date, meal_type, source, name, calories, protein, carbs, fat, fiber,
 		    photo_path, detected_food, ai_confidence, user_adjusted)
-		 VALUES ($1, $2, $3, 'photo', $4, $5, $6, $7, $8, $9, $10, $11, false)
+		 VALUES ($1, $2, $3, 'photo', $4, $5, $6, $7, $8, $9, $10, $11, $12, false)
 		 RETURNING `+mealColumns,
-		userID, req.Date, req.MealType, estimate.Name, calories, protein, carbs, fat,
+		userID, req.Date, req.MealType, estimate.Name, calories, protein, carbs, fat, fiber,
 		req.Path, estimate.Name, estimate.Confidence,
 	)
 	m, err := scanMeal(row)
@@ -189,11 +193,11 @@ func AdjustMeal(c *gin.Context) {
 	}
 
 	var existingCalories int
-	var protein, carbs, fat float64
+	var protein, carbs, fat, fiber float64
 	if err := db.Pool.QueryRow(c.Request.Context(),
-		`SELECT calories, protein, carbs, fat FROM public.food_logs WHERE id = $1 AND user_id = $2`,
+		`SELECT calories, protein, carbs, fat, fiber FROM public.food_logs WHERE id = $1 AND user_id = $2`,
 		id, userID,
-	).Scan(&existingCalories, &protein, &carbs, &fat); err != nil {
+	).Scan(&existingCalories, &protein, &carbs, &fat, &fiber); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "meal not found"})
 		return
 	}
@@ -205,10 +209,10 @@ func AdjustMeal(c *gin.Context) {
 
 	row := db.Pool.QueryRow(c.Request.Context(),
 		`UPDATE public.food_logs
-		 SET calories = $1, protein = $2, carbs = $3, fat = $4, user_adjusted = true
-		 WHERE id = $5 AND user_id = $6
+		 SET calories = $1, protein = $2, carbs = $3, fat = $4, fiber = $5, user_adjusted = true
+		 WHERE id = $6 AND user_id = $7
 		 RETURNING `+mealColumns,
-		req.Calories, protein*ratio, carbs*ratio, fat*ratio, id, userID,
+		req.Calories, protein*ratio, carbs*ratio, fat*ratio, fiber*ratio, id, userID,
 	)
 	m, err := scanMeal(row)
 	if err != nil {

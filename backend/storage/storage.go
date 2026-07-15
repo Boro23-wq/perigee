@@ -26,6 +26,22 @@ func bucket() string {
 	return "meal-photos"
 }
 
+// AvatarsBucket is a separate, public bucket — profile pictures need to
+// render instantly in the nav/dashboard on every page load without an extra
+// signed-URL round trip, unlike meal photos which are only viewed on demand.
+func AvatarsBucket() string {
+	if b := os.Getenv("AVATARS_BUCKET"); b != "" {
+		return b
+	}
+	return "avatars"
+}
+
+// PublicURL builds a permanent, unsigned URL for an object in a public
+// bucket — no expiry, safe to use directly as an <img src>.
+func PublicURL(bucketName, path string) string {
+	return fmt.Sprintf("%s/storage/v1/object/public/%s/%s", baseURL(), bucketName, path)
+}
+
 func authHeaders(req *http.Request) {
 	key := serviceRoleKey()
 	req.Header.Set("Authorization", "Bearer "+key)
@@ -36,7 +52,13 @@ func authHeaders(req *http.Request) {
 // path, valid for a couple of minutes — the client PUTs the file bytes
 // straight to it, so they never touch our Go server.
 func CreateSignedUploadURL(path string) (string, error) {
-	endpoint := fmt.Sprintf("%s/storage/v1/object/upload/sign/%s/%s", baseURL(), bucket(), path)
+	return CreateSignedUploadURLIn(bucket(), path)
+}
+
+// CreateSignedUploadURLIn is CreateSignedUploadURL for a specific bucket,
+// rather than the default meal-photos one.
+func CreateSignedUploadURLIn(bucketName, path string) (string, error) {
+	endpoint := fmt.Sprintf("%s/storage/v1/object/upload/sign/%s/%s", baseURL(), bucketName, path)
 	req, err := http.NewRequest(http.MethodPost, endpoint, nil)
 	if err != nil {
 		return "", err

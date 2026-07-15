@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import Link from "next/link";
+import { AppHeader } from "@/components/AppHeader";
 import { Check, MoreVertical, Pencil, Share2, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { localDateString } from "@/lib/date";
-import { Logo } from "@/components/Logo";
 import { Skeleton } from "@/components/Skeleton";
 
 type Recipe = {
@@ -15,6 +14,7 @@ type Recipe = {
   protein: number;
   carbs: number;
   fat: number;
+  fiber: number;
   servings: number;
   ingredients: string[];
   share_token: string | null;
@@ -43,6 +43,7 @@ export default function RecipesPage() {
   const [protein, setProtein] = useState("");
   const [carbs, setCarbs] = useState("");
   const [fat, setFat] = useState("");
+  const [fiber, setFiber] = useState("");
   const [ingredientsText, setIngredientsText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -106,6 +107,7 @@ export default function RecipesPage() {
     setProtein("");
     setCarbs("");
     setFat("");
+    setFiber("");
     setIngredientsText("");
   }
 
@@ -118,6 +120,7 @@ export default function RecipesPage() {
     setProtein(recipe.protein ? String(recipe.protein) : "");
     setCarbs(recipe.carbs ? String(recipe.carbs) : "");
     setFat(recipe.fat ? String(recipe.fat) : "");
+    setFiber(recipe.fiber ? String(recipe.fiber) : "");
     setIngredientsText(recipe.ingredients.join("\n"));
     document.getElementById("recipeName")?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
@@ -134,6 +137,7 @@ export default function RecipesPage() {
       protein: protein ? Number(protein) : 0,
       carbs: carbs ? Number(carbs) : 0,
       fat: fat ? Number(fat) : 0,
+      fiber: fiber ? Number(fiber) : 0,
       ingredients: ingredientsText
         .split("\n")
         .map((s) => s.trim())
@@ -160,17 +164,7 @@ export default function RecipesPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-b border-border">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4 sm:px-8">
-          <Logo />
-          <Link
-            href="/dashboard"
-            className="text-[13px] text-muted hover:text-foreground transition-colors"
-          >
-            Dashboard
-          </Link>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="mx-auto w-full max-w-4xl flex-1 px-6 pb-20 pt-6 sm:px-8">
         <h1 className="text-xl font-semibold tracking-tight">Recipes</h1>
@@ -354,6 +348,19 @@ export default function RecipesPage() {
                   min={0}
                   value={fat}
                   onChange={(e) => setFat(e.target.value)}
+                  className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="totalFiber" className="text-[13px] font-medium text-muted">
+                  Fiber
+                </label>
+                <input
+                  id="totalFiber"
+                  type="number"
+                  min={0}
+                  value={fiber}
+                  onChange={(e) => setFiber(e.target.value)}
                   className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
                 />
               </div>

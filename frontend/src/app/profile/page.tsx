@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import Link from "next/link";
-import { Logo } from "@/components/Logo";
+import imageCompression from "browser-image-compression";
+import { Camera } from "lucide-react";
+import { AppHeader } from "@/components/AppHeader";
 import { Skeleton } from "@/components/Skeleton";
+import { Accordion } from "@/components/Accordion";
+import { MacroTargetFields, type MacroTargetValues } from "@/components/MacroTargetFields";
 import { api } from "@/lib/api";
 
 type Profile = {
@@ -12,6 +16,11 @@ type Profile = {
   weight_goal_lbs: number | null;
   goal_date: string | null;
   height_in: number | null;
+  avatar_url: string | null;
+  protein_target_g: number | null;
+  carbs_target_g: number | null;
+  fat_target_g: number | null;
+  fiber_target_g: number | null;
 };
 
 export default function ProfilePage() {
@@ -22,9 +31,19 @@ export default function ProfilePage() {
   const [calorieBudget, setCalorieBudget] = useState("");
   const [goalWeight, setGoalWeight] = useState("");
   const [goalDate, setGoalDate] = useState("");
+  const [macros, setMacros] = useState<MacroTargetValues>({
+    protein: "",
+    carbs: "",
+    fat: "",
+    fiber: "",
+  });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
 
   useEffect(() => {
     api.get("/api/me").then((data: Profile) => {
@@ -35,8 +54,50 @@ export default function ProfilePage() {
       setCalorieBudget(String(data.daily_calorie_budget));
       setGoalWeight(data.weight_goal_lbs != null ? String(data.weight_goal_lbs) : "");
       setGoalDate(data.goal_date ?? "");
+      setMacros({
+        protein: data.protein_target_g != null ? String(data.protein_target_g) : "",
+        carbs: data.carbs_target_g != null ? String(data.carbs_target_g) : "",
+        fat: data.fat_target_g != null ? String(data.fat_target_g) : "",
+        fiber: data.fiber_target_g != null ? String(data.fiber_target_g) : "",
+      });
     });
   }, []);
+
+  async function handleAvatarSelect(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setAvatarUploading(true);
+    setAvatarError("");
+
+    try {
+      const compressed = await imageCompression(file, {
+        maxSizeMB: 0.3,
+        maxWidthOrHeight: 512,
+        useWebWorker: true,
+      });
+      const contentType = compressed.type || "image/jpeg";
+
+      const { path, upload_url } = await api.post("/api/me/avatar/upload-url", {
+        content_type: contentType,
+      });
+
+      const putRes = await fetch(upload_url, {
+        method: "PUT",
+        headers: { "Content-Type": contentType },
+        body: compressed,
+      });
+      if (!putRes.ok) throw new Error("Photo upload failed");
+
+      const updated = await api.patch("/api/me", { avatar_path: path });
+      setProfile(updated);
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : "Failed to upload photo");
+    } finally {
+      setAvatarUploading(false);
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -54,6 +115,10 @@ export default function ProfilePage() {
         daily_calorie_budget: calorieBudget ? Number(calorieBudget) : undefined,
         weight_goal_lbs: goalWeight ? Number(goalWeight) : undefined,
         goal_date: goalDate || undefined,
+        protein_target_g: macros.protein ? Number(macros.protein) : undefined,
+        carbs_target_g: macros.carbs ? Number(macros.carbs) : undefined,
+        fat_target_g: macros.fat ? Number(macros.fat) : undefined,
+        fiber_target_g: macros.fiber ? Number(macros.fiber) : undefined,
       });
       setProfile(updated);
       setSaved(true);
@@ -66,155 +131,205 @@ export default function ProfilePage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-b border-border">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4 sm:px-8">
-          <Logo />
-          <Link
-            href="/dashboard"
-            className="text-[13px] text-muted hover:text-foreground transition-colors"
-          >
-            Dashboard
-          </Link>
-        </div>
-      </header>
+      <AppHeader />
 
-      <main className="mx-auto w-full max-w-90 flex-1 px-6 pb-20 pt-10 sm:px-8">
+      <main className="mx-auto w-full max-w-4xl flex-1 px-6 pb-20 pt-6 sm:px-8">
         <h1 className="text-xl font-semibold tracking-tight">Profile</h1>
         <p className="mt-1.5 text-[13px] text-muted">
           Update your measurements and goals.
         </p>
 
-        <div className="mt-6 rounded-2xl border border-border bg-surface p-6 shadow-soft">
-          {!profile ? (
-            <div className="flex flex-col gap-4">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="displayName"
-                  className="text-[11px] font-medium uppercase tracking-wide text-muted"
-                >
-                  Name
-                </label>
+        {!profile ? (
+          <div className="mt-7 flex flex-col gap-6">
+            <Skeleton className="h-20 w-20 rounded-full" />
+            <Skeleton className="h-10 w-full max-w-md" />
+            <Skeleton className="h-10 w-full max-w-md" />
+          </div>
+        ) : (
+          <>
+            <section className="mt-7">
+              <h2 className="label-xs">Photo</h2>
+              <div className="mt-3 flex items-center gap-4">
                 <input
-                  id="displayName"
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  className="rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarSelect}
+                  className="hidden"
                 />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[11px] font-medium uppercase tracking-wide text-muted">
-                  Height
-                </label>
-                <div className="flex gap-2">
-                  <div className="flex flex-1 items-center gap-1.5">
-                    <input
-                      type="number"
-                      min={0}
-                      max={8}
-                      value={feet}
-                      onChange={(e) => setFeet(e.target.value)}
-                      className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                <button
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={avatarUploading}
+                  aria-label="Upload profile photo"
+                  className="group relative h-20 w-20 shrink-0 overflow-hidden rounded-full border border-border bg-surface-2 disabled:opacity-60"
+                >
+                  {profile.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={profile.avatar_url}
+                      alt=""
+                      className="h-full w-full object-cover"
                     />
-                    <span className="text-[13px] text-muted">ft</span>
-                  </div>
-                  <div className="flex flex-1 items-center gap-1.5">
-                    <input
-                      type="number"
-                      min={0}
-                      max={11}
-                      value={inches}
-                      onChange={(e) => setInches(e.target.value)}
-                      className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-xl font-medium text-muted">
+                      {(displayName || "?").charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/40">
+                    <Camera
+                      size={18}
+                      className="text-transparent transition-colors group-hover:text-white"
                     />
-                    <span className="text-[13px] text-muted">in</span>
                   </div>
+                </button>
+                <div>
+                  <button
+                    onClick={() => avatarInputRef.current?.click()}
+                    disabled={avatarUploading}
+                    className="text-[13px] font-medium text-accent hover:opacity-90 disabled:opacity-50"
+                  >
+                    {avatarUploading ? "Uploading…" : "Change photo"}
+                  </button>
+                  {avatarError && (
+                    <p className="mt-1 text-[13px] text-danger">{avatarError}</p>
+                  )}
                 </div>
               </div>
+            </section>
 
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="calorieBudget"
-                  className="text-[11px] font-medium uppercase tracking-wide text-muted"
-                >
-                  Daily calorie budget
-                </label>
-                <input
-                  id="calorieBudget"
-                  type="number"
-                  min={800}
-                  max={10000}
-                  value={calorieBudget}
-                  onChange={(e) => setCalorieBudget(e.target.value)}
-                  className="rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
-                />
-              </div>
-
-              <div className="flex gap-2">
-                <div className="flex flex-1 flex-col gap-1.5">
+            <section className="mt-7 max-w-md">
+              <h2 className="label-xs">Details</h2>
+              <form onSubmit={handleSubmit} className="mt-3 flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
                   <label
-                    htmlFor="goalWeight"
+                    htmlFor="displayName"
                     className="text-[11px] font-medium uppercase tracking-wide text-muted"
                   >
-                    Goal weight (lbs)
+                    Name
                   </label>
                   <input
-                    id="goalWeight"
+                    id="displayName"
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className="rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[11px] font-medium uppercase tracking-wide text-muted">
+                    Height
+                  </label>
+                  <div className="flex gap-2">
+                    <div className="flex flex-1 items-center gap-1.5">
+                      <input
+                        type="number"
+                        min={0}
+                        max={8}
+                        value={feet}
+                        onChange={(e) => setFeet(e.target.value)}
+                        className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                      />
+                      <span className="text-[13px] text-muted">ft</span>
+                    </div>
+                    <div className="flex flex-1 items-center gap-1.5">
+                      <input
+                        type="number"
+                        min={0}
+                        max={11}
+                        value={inches}
+                        onChange={(e) => setInches(e.target.value)}
+                        className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                      />
+                      <span className="text-[13px] text-muted">in</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label
+                    htmlFor="calorieBudget"
+                    className="text-[11px] font-medium uppercase tracking-wide text-muted"
+                  >
+                    Daily calorie budget
+                  </label>
+                  <input
+                    id="calorieBudget"
                     type="number"
-                    min={0}
-                    step="0.1"
-                    value={goalWeight}
-                    onChange={(e) => setGoalWeight(e.target.value)}
+                    min={800}
+                    max={10000}
+                    value={calorieBudget}
+                    onChange={(e) => setCalorieBudget(e.target.value)}
                     className="rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
                   />
                 </div>
-                <div className="flex flex-1 flex-col gap-1.5">
-                  <label
-                    htmlFor="goalDate"
-                    className="text-[11px] font-medium uppercase tracking-wide text-muted"
-                  >
-                    Goal date
-                  </label>
-                  <input
-                    id="goalDate"
-                    type="date"
-                    value={goalDate}
-                    onChange={(e) => setGoalDate(e.target.value)}
-                    className="rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
-                  />
+
+                <div className="flex gap-2">
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <label
+                      htmlFor="goalWeight"
+                      className="text-[11px] font-medium uppercase tracking-wide text-muted"
+                    >
+                      Goal weight (lbs)
+                    </label>
+                    <input
+                      id="goalWeight"
+                      type="number"
+                      min={0}
+                      step="0.1"
+                      value={goalWeight}
+                      onChange={(e) => setGoalWeight(e.target.value)}
+                      className="rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                    />
+                  </div>
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <label
+                      htmlFor="goalDate"
+                      className="text-[11px] font-medium uppercase tracking-wide text-muted"
+                    >
+                      Goal date
+                    </label>
+                    <input
+                      id="goalDate"
+                      type="date"
+                      value={goalDate}
+                      onChange={(e) => setGoalDate(e.target.value)}
+                      className="rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <p className="text-xs text-muted-2">
-                To log a new weigh-in, use the{" "}
-                <Link href="/weight" className="text-accent hover:opacity-90">
-                  weight page
-                </Link>
-                .
-              </p>
+                <p className="text-xs text-muted-2">
+                  To log a new weigh-in, use the{" "}
+                  <Link href="/weight" className="text-accent hover:opacity-90">
+                    weight page
+                  </Link>
+                  .
+                </p>
 
-              {error && <p className="text-[13px] text-danger">{error}</p>}
-              {saved && !error && (
-                <p className="text-[13px] text-accent">Saved.</p>
-              )}
+                <Accordion title="Advanced: macro targets" subtitle="Optional — protein, carbs, fat, fiber">
+                  <MacroTargetFields
+                    values={macros}
+                    onChange={(key, value) => setMacros((m) => ({ ...m, [key]: value }))}
+                  />
+                </Accordion>
 
-              <button
-                type="submit"
-                disabled={saving}
-                className="mt-1 rounded-lg bg-accent px-4 py-2.5 text-[13px] font-medium text-accent-foreground shadow-soft transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                {saving ? "Saving…" : "Save changes"}
-              </button>
-            </form>
-          )}
-        </div>
+                {error && <p className="text-[13px] text-danger">{error}</p>}
+                {saved && !error && (
+                  <p className="text-[13px] text-accent">Saved.</p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="mt-1 self-start rounded-lg bg-accent px-4 py-2.5 text-[13px] font-medium text-accent-foreground shadow-soft transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  {saving ? "Saving…" : "Save changes"}
+                </button>
+              </form>
+            </section>
+          </>
+        )}
       </main>
     </div>
   );

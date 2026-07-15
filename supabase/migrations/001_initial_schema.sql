@@ -15,6 +15,11 @@ CREATE TABLE public.profiles (
   goal_date DATE,
   height_in NUMERIC(5,1),
   onboarded_at TIMESTAMPTZ,
+  avatar_path TEXT,
+  protein_target_g NUMERIC(6,1),
+  carbs_target_g NUMERIC(6,1),
+  fat_target_g NUMERIC(6,1),
+  fiber_target_g NUMERIC(6,1),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -63,6 +68,7 @@ CREATE TABLE public.recipes (
   protein NUMERIC(7,2) NOT NULL DEFAULT 0,
   carbs NUMERIC(7,2) NOT NULL DEFAULT 0,
   fat NUMERIC(7,2) NOT NULL DEFAULT 0,
+  fiber NUMERIC(7,2) NOT NULL DEFAULT 0,
   servings NUMERIC(4,1) NOT NULL DEFAULT 1,
   ingredients JSONB NOT NULL DEFAULT '[]',
   share_token TEXT UNIQUE DEFAULT encode(gen_random_bytes(16), 'hex'),
@@ -94,6 +100,7 @@ CREATE TABLE public.food_logs (
   protein NUMERIC(7,2) NOT NULL DEFAULT 0,
   carbs NUMERIC(7,2) NOT NULL DEFAULT 0,
   fat NUMERIC(7,2) NOT NULL DEFAULT 0,
+  fiber NUMERIC(7,2) NOT NULL DEFAULT 0,
   serving_grams NUMERIC(7,1),  -- barcode serving size
   ai_confidence TEXT CHECK (ai_confidence IN ('low','medium','high')),
   user_adjusted BOOLEAN NOT NULL DEFAULT false,

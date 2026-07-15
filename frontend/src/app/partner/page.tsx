@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import Link from "next/link";
 import { api } from "@/lib/api";
-import { Logo } from "@/components/Logo";
+import { AppHeader } from "@/components/AppHeader";
 import { Skeleton } from "@/components/Skeleton";
 
 type PartnerInfo = {
@@ -86,17 +85,7 @@ export default function PartnerPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-b border-border">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4 sm:px-8">
-          <Logo />
-          <Link
-            href="/dashboard"
-            className="text-[13px] text-muted hover:text-foreground transition-colors"
-          >
-            Dashboard
-          </Link>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="mx-auto w-full max-w-4xl flex-1 px-6 pb-20 pt-6 sm:px-8">
         <h1 className="text-xl font-semibold tracking-tight">Partner</h1>

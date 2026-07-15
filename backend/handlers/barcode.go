@@ -25,6 +25,7 @@ type barcodeProduct struct {
 	ProteinPer100  float64  `json:"protein_per_100g"`
 	CarbsPer100    float64  `json:"carbs_per_100g"`
 	FatPer100      float64  `json:"fat_per_100g"`
+	FiberPer100    float64  `json:"fiber_per_100g"`
 	ServingGrams   *float64 `json:"serving_grams"`
 	ServingLabel   *string  `json:"serving_label"`
 }
@@ -40,6 +41,7 @@ type openFoodFactsResponse struct {
 			Proteins100g   float64 `json:"proteins_100g"`
 			Carbs100g      float64 `json:"carbohydrates_100g"`
 			Fat100g        float64 `json:"fat_100g"`
+			Fiber100g      float64 `json:"fiber_100g"`
 		} `json:"nutriments"`
 	} `json:"product"`
 }
@@ -95,6 +97,7 @@ func GetBarcodeProduct(c *gin.Context) {
 		ProteinPer100:  off.Product.Nutriments.Proteins100g,
 		CarbsPer100:    off.Product.Nutriments.Carbs100g,
 		FatPer100:      off.Product.Nutriments.Fat100g,
+		FiberPer100:    off.Product.Nutriments.Fiber100g,
 	}
 	if off.Product.ServingQuantity > 0 {
 		product.ServingGrams = &off.Product.ServingQuantity
@@ -114,6 +117,7 @@ type logBarcodeMealRequest struct {
 	Protein      float64 `json:"protein"`
 	Carbs        float64 `json:"carbs"`
 	Fat          float64 `json:"fat"`
+	Fiber        float64 `json:"fiber"`
 	ServingGrams float64 `json:"serving_grams"`
 }
 
@@ -152,7 +156,7 @@ func LogBarcodeMeal(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "calories must be between 0 and 10000"})
 		return
 	}
-	if req.Protein < 0 || req.Carbs < 0 || req.Fat < 0 {
+	if req.Protein < 0 || req.Carbs < 0 || req.Fat < 0 || req.Fiber < 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "macros cannot be negative"})
 		return
 	}
@@ -163,10 +167,10 @@ func LogBarcodeMeal(c *gin.Context) {
 
 	row := db.Pool.QueryRow(c.Request.Context(),
 		`INSERT INTO public.food_logs
-		   (user_id, date, meal_type, source, name, calories, protein, carbs, fat, serving_grams)
-		 VALUES ($1, $2, $3, 'barcode', $4, $5, $6, $7, $8, $9)
+		   (user_id, date, meal_type, source, name, calories, protein, carbs, fat, fiber, serving_grams)
+		 VALUES ($1, $2, $3, 'barcode', $4, $5, $6, $7, $8, $9, $10)
 		 RETURNING `+mealColumns,
-		userID, req.Date, req.MealType, req.Name, req.Calories, req.Protein, req.Carbs, req.Fat, req.ServingGrams,
+		userID, req.Date, req.MealType, req.Name, req.Calories, req.Protein, req.Carbs, req.Fat, req.Fiber, req.ServingGrams,
 	)
 	m, err := scanMeal(row)
 	if err != nil {

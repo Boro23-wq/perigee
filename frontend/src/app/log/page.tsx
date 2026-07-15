@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
-import Link from "next/link";
 import imageCompression from "browser-image-compression";
 import { api } from "@/lib/api";
 import { localDateString } from "@/lib/date";
-import { Logo } from "@/components/Logo";
+import { AppHeader } from "@/components/AppHeader";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { Skeleton } from "@/components/Skeleton";
 
@@ -16,6 +15,7 @@ type Usual = {
   protein: number;
   carbs: number;
   fat: number;
+  fiber: number;
   times: number;
   last: string;
 };
@@ -41,11 +41,20 @@ type BarcodeProduct = {
   protein_per_100g: number;
   carbs_per_100g: number;
   fat_per_100g: number;
+  fiber_per_100g: number;
   serving_grams: number | null;
   serving_label: string | null;
 };
 
 const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack", "drink"] as const;
+
+function currentMealType() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 11) return "breakfast";
+  if (hour >= 11 && hour < 15) return "lunch";
+  if (hour >= 15 && hour < 21) return "dinner";
+  return "snack";
+}
 
 function confidenceStyle(confidence: PhotoMeal["ai_confidence"]) {
   switch (confidence) {
@@ -62,12 +71,13 @@ export default function LogPage() {
   const [usuals, setUsuals] = useState<Usual[] | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
 
-  const [mealType, setMealType] = useState<string>("breakfast");
+  const [mealType, setMealType] = useState<string>(currentMealType);
   const [name, setName] = useState("");
   const [calories, setCalories] = useState("");
   const [protein, setProtein] = useState("");
   const [carbs, setCarbs] = useState("");
   const [fat, setFat] = useState("");
+  const [fiber, setFiber] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -117,6 +127,7 @@ export default function LogPage() {
         protein: u.protein,
         carbs: u.carbs,
         fat: u.fat,
+        fiber: u.fiber,
       });
       showToast(`Logged ${u.name}`, meal.id);
     } catch (err) {
@@ -214,6 +225,7 @@ export default function LogPage() {
     ? (barcodeProduct.carbs_per_100g * gramsEaten) / 100
     : 0;
   const barcodeFat = barcodeProduct ? (barcodeProduct.fat_per_100g * gramsEaten) / 100 : 0;
+  const barcodeFiber = barcodeProduct ? (barcodeProduct.fiber_per_100g * gramsEaten) / 100 : 0;
 
   async function handleLogBarcode() {
     if (!barcodeProduct || gramsEaten <= 0) return;
@@ -229,6 +241,7 @@ export default function LogPage() {
         protein: barcodeProtein,
         carbs: barcodeCarbs,
         fat: barcodeFat,
+        fiber: barcodeFiber,
         serving_grams: gramsEaten,
       });
       showToast(`Logged ${barcodeProduct.name}`, meal.id);
@@ -256,6 +269,7 @@ export default function LogPage() {
         protein: protein ? Number(protein) : 0,
         carbs: carbs ? Number(carbs) : 0,
         fat: fat ? Number(fat) : 0,
+        fiber: fiber ? Number(fiber) : 0,
       });
       showToast(`Logged ${name}`, meal.id);
       setName("");
@@ -263,6 +277,7 @@ export default function LogPage() {
       setProtein("");
       setCarbs("");
       setFat("");
+      setFiber("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to log meal");
     } finally {
@@ -272,20 +287,29 @@ export default function LogPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-b border-border">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4 sm:px-8">
-          <Logo />
-          <Link
-            href="/dashboard"
-            className="text-[13px] text-muted hover:text-foreground transition-colors"
-          >
-            Dashboard
-          </Link>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="mx-auto w-full max-w-4xl flex-1 px-6 pb-20 pt-6 sm:px-8">
-        <h1 className="text-xl font-semibold tracking-tight">Log a meal</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-semibold tracking-tight">Log a meal</h1>
+          <div className="flex items-center gap-2">
+            <label htmlFor="mealType" className="text-[13px] font-medium text-muted">
+              Logging as
+            </label>
+            <select
+              id="mealType"
+              value={mealType}
+              onChange={(e) => setMealType(e.target.value)}
+              className="rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+            >
+              {MEAL_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t[0].toUpperCase() + t.slice(1)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
 
         <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2">
           <section>
@@ -475,25 +499,7 @@ export default function LogPage() {
             onSubmit={handleManualSubmit}
             className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
           >
-            <div className="flex flex-col gap-1">
-              <label htmlFor="mealType" className="text-[13px] font-medium text-muted">
-                Meal
-              </label>
-              <select
-                id="mealType"
-                value={mealType}
-                onChange={(e) => setMealType(e.target.value)}
-                className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
-              >
-                {MEAL_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t[0].toUpperCase() + t.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex flex-col gap-1 sm:col-span-1 lg:col-span-3">
+            <div className="flex flex-col gap-1 sm:col-span-2 lg:col-span-4">
               <label htmlFor="name" className="text-[13px] font-medium text-muted">
                 Name
               </label>
@@ -565,6 +571,21 @@ export default function LogPage() {
                 inputMode="decimal"
                 value={fat}
                 onChange={(e) => setFat(e.target.value)}
+                className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label htmlFor="fiber" className="text-[13px] font-medium text-muted">
+                Fiber
+              </label>
+              <input
+                id="fiber"
+                type="number"
+                min={0}
+                inputMode="decimal"
+                value={fiber}
+                onChange={(e) => setFiber(e.target.value)}
                 className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
               />
             </div>

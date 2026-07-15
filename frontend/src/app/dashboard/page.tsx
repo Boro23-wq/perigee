@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MoreVertical } from "lucide-react";
+import { ArrowRight, MoreVertical } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { api } from "@/lib/api";
 import { localDateString } from "@/lib/date";
-import { Logo } from "@/components/Logo";
+import { AppHeader } from "@/components/AppHeader";
 import { Skeleton } from "@/components/Skeleton";
 
 type Meal = {
@@ -30,6 +30,7 @@ type Totals = {
   protein: number;
   carbs: number;
   fat: number;
+  fiber: number;
 };
 
 type WeightSummary = {
@@ -90,9 +91,61 @@ function dayLabel(iso: string) {
   });
 }
 
+type MacroTargets = {
+  protein_target_g: number | null;
+  carbs_target_g: number | null;
+  fat_target_g: number | null;
+  fiber_target_g: number | null;
+};
+
+function hasMacroTargets(p: MacroTargets) {
+  return (
+    p.protein_target_g != null ||
+    p.carbs_target_g != null ||
+    p.fat_target_g != null ||
+    p.fiber_target_g != null
+  );
+}
+
+function MacroBar({
+  label,
+  consumed,
+  target,
+}: {
+  label: string;
+  consumed: number;
+  target: number;
+}) {
+  const pct = target > 0 ? Math.min(100, (consumed / target) * 100) : 0;
+  return (
+    <div>
+      <div className="flex items-baseline justify-between text-[13px]">
+        <span className="text-muted">{label}</span>
+        <span className="tabular-nums text-foreground">
+          {Math.round(consumed)} <span className="text-muted">/ {Math.round(target)}g</span>
+        </span>
+      </div>
+      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+        <div
+          className="h-full rounded-full bg-accent transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
+  const [profile, setProfile] = useState<{
+    display_name: string | null;
+    avatar_url: string | null;
+    protein_target_g: number | null;
+    carbs_target_g: number | null;
+    fat_target_g: number | null;
+    fiber_target_g: number | null;
+  } | null>(null);
   const [meals, setMeals] = useState<Meal[] | null>(null);
   const [totals, setTotals] = useState<Totals | null>(null);
   const [stats, setStats] = useState<WeeklyStats | null>(null);
@@ -166,6 +219,14 @@ export default function DashboardPage() {
           router.replace("/onboarding");
           return;
         }
+        setProfile({
+          display_name: me.display_name,
+          avatar_url: me.avatar_url,
+          protein_target_g: me.protein_target_g,
+          carbs_target_g: me.carbs_target_g,
+          fat_target_g: me.fat_target_g,
+          fiber_target_g: me.fiber_target_g,
+        });
 
         await Promise.all([
           loadMeals(),
@@ -292,13 +353,6 @@ export default function DashboardPage() {
     }
   }
 
-  async function handleLogout() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
-  }
-
   const today = localDateString();
   const todayStat = stats?.days.find((d) => d.date === today);
   const budget =
@@ -322,48 +376,28 @@ export default function DashboardPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-b border-border">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4 sm:px-8">
-          <Logo />
-          <div className="flex items-center gap-4">
-            <Link
-              href="/coach"
-              className="text-[13px] text-muted hover:text-foreground transition-colors"
-            >
-              Coach
-            </Link>
-            <Link
-              href="/recipes"
-              className="text-[13px] text-muted hover:text-foreground transition-colors"
-            >
-              Recipes
-            </Link>
-            <Link
-              href="/partner"
-              className="text-[13px] text-muted hover:text-foreground transition-colors"
-            >
-              Partner
-            </Link>
-            <Link
-              href="/profile"
-              className="text-[13px] text-muted hover:text-foreground transition-colors"
-            >
-              Profile
-            </Link>
-            <button
-              onClick={handleLogout}
-              className="text-[13px] text-muted hover:text-foreground transition-colors"
-            >
-              Log out
-            </button>
-          </div>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="mx-auto w-full max-w-4xl flex-1 px-6 pb-20 pt-6 sm:px-8">
         <div className="flex items-baseline justify-between">
           <h1 className="text-xl font-semibold tracking-tight">Today</h1>
-          <p className="text-[13px] text-muted">{email ?? "Loading…"}</p>
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] text-muted">
+              {profile?.display_name || email || "Loading…"}
+            </span>
+            {profile?.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={profile.avatar_url}
+                alt=""
+                className="h-7 w-7 rounded-full border border-border object-cover"
+              />
+            ) : (
+              <div className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface-2 text-[11px] font-medium text-muted">
+                {(profile?.display_name || email || "?").charAt(0).toUpperCase()}
+              </div>
+            )}
+          </div>
         </div>
 
         {error && <p className="mt-4 text-[13px] text-danger">{error}</p>}
@@ -399,6 +433,26 @@ export default function DashboardPage() {
             </div>
             <Skeleton className="mt-3 h-1.5 w-full rounded-full" />
             <Skeleton className="mt-2 h-4 w-40" />
+          </div>
+        )}
+
+        {totals && profile && hasMacroTargets(profile) && (
+          <div className="mt-3 rounded-xl border border-border bg-surface p-5 shadow-soft">
+            <p className="label-xs">Macros</p>
+            <div className="mt-3 flex flex-col gap-3">
+              {profile.protein_target_g != null && (
+                <MacroBar label="Protein" consumed={totals.protein} target={profile.protein_target_g} />
+              )}
+              {profile.carbs_target_g != null && (
+                <MacroBar label="Carbs" consumed={totals.carbs} target={profile.carbs_target_g} />
+              )}
+              {profile.fat_target_g != null && (
+                <MacroBar label="Fat" consumed={totals.fat} target={profile.fat_target_g} />
+              )}
+              {profile.fiber_target_g != null && (
+                <MacroBar label="Fiber" consumed={totals.fiber} target={profile.fiber_target_g} />
+              )}
+            </div>
           </div>
         )}
 
@@ -663,7 +717,9 @@ export default function DashboardPage() {
                   : "Log weigh-in"}
               </p>
             </div>
-            <span className="text-xs text-muted">Trend →</span>
+            <span className="flex items-center gap-1 text-xs text-muted">
+              Trend <ArrowRight size={12} />
+            </span>
           </Link>
         </div>
 

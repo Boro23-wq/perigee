@@ -43,6 +43,7 @@ func main() {
 	{
 		api.GET("/me", handlers.GetMe)
 		api.PATCH("/me", handlers.UpdateProfile)
+		api.POST("/me/avatar/upload-url", handlers.RequestAvatarUploadURL)
 		api.POST("/meals", handlers.LogMeal)
 		api.GET("/meals", handlers.GetMeals)
 		api.GET("/meals/usuals", handlers.GetUsuals)

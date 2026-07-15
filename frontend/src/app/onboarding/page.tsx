@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { localDateString } from "@/lib/date";
 import { PerigeeMark } from "@/components/Logo";
+import { Accordion } from "@/components/Accordion";
+import { MacroTargetFields, type MacroTargetValues } from "@/components/MacroTargetFields";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -15,6 +17,12 @@ export default function OnboardingPage() {
   const [calorieBudget, setCalorieBudget] = useState("1800");
   const [goalWeight, setGoalWeight] = useState("");
   const [goalDate, setGoalDate] = useState("");
+  const [macros, setMacros] = useState<MacroTargetValues>({
+    protein: "",
+    carbs: "",
+    fat: "",
+    fiber: "",
+  });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -35,6 +43,10 @@ export default function OnboardingPage() {
         daily_calorie_budget: calorieBudget ? Number(calorieBudget) : undefined,
         weight_goal_lbs: goalWeight ? Number(goalWeight) : undefined,
         goal_date: goalDate || undefined,
+        protein_target_g: macros.protein ? Number(macros.protein) : undefined,
+        carbs_target_g: macros.carbs ? Number(macros.carbs) : undefined,
+        fat_target_g: macros.fat ? Number(macros.fat) : undefined,
+        fiber_target_g: macros.fiber ? Number(macros.fiber) : undefined,
         complete_onboarding: true,
       });
 
@@ -190,6 +202,13 @@ export default function OnboardingPage() {
               Goal fields are optional. You can add or change these anytime
               from your profile.
             </p>
+
+            <Accordion title="Advanced: macro targets" subtitle="Optional — protein, carbs, fat, fiber">
+              <MacroTargetFields
+                values={macros}
+                onChange={(key, value) => setMacros((m) => ({ ...m, [key]: value }))}
+              />
+            </Accordion>
 
             {error && <p className="text-[13px] text-danger">{error}</p>}
 

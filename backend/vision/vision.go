@@ -24,11 +24,12 @@ type Estimate struct {
 	Protein    float64 `json:"protein"`
 	Carbs      float64 `json:"carbs"`
 	Fat        float64 `json:"fat"`
+	Fiber      float64 `json:"fiber"`
 	Confidence string  `json:"confidence"` // "low" | "medium" | "high"
 }
 
 const prompt = `Identify the food in this photo and estimate its nutrition for the visible portion. Respond with ONLY a JSON object — no prose, no markdown code fences — matching exactly this shape:
-{"name": string, "calories": integer, "protein": number, "carbs": number, "fat": number, "confidence": "low"|"medium"|"high"}
+{"name": string, "calories": integer, "protein": number, "carbs": number, "fat": number, "fiber": number, "confidence": "low"|"medium"|"high"}
 "confidence" is your own certainty about portion size and hidden ingredients (oils, butter, sauces) — restaurant or mixed dishes are usually "low" or "medium", a single whole food (an apple, a plain egg) can be "high".`
 
 var jsonFence = regexp.MustCompile("(?s)```(?:json)?\\s*(.*?)\\s*```")
