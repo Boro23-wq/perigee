@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { MoreVertical } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { api } from "@/lib/api";
 import { localDateString } from "@/lib/date";
@@ -106,6 +107,10 @@ export default function DashboardPage() {
   const [checkinLoaded, setCheckinLoaded] = useState(false);
   const [checkinMood, setCheckinMood] = useState<string | null>(null);
   const [checkinError, setCheckinError] = useState("");
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [newSharedIds, setNewSharedIds] = useState<Set<string>>(new Set());
+  const [banner, setBanner] = useState<string | null>(null);
+  const sharedCheckDone = useRef(false);
 
   const loadMeals = useCallback(async () => {
     const data = await api.get(`/api/meals?date=${localDateString()}`);
@@ -173,6 +178,43 @@ export default function DashboardPage() {
     load();
   }, [router, loadMeals, loadStats, loadActivity, loadPartner, loadCheckin]);
 
+  // First time a shared meal from a partner shows up, flag it — a one-time
+  // highlight + banner, tracked in localStorage so it never repeats.
+  useEffect(() => {
+    if (sharedCheckDone.current || !meals || !partner) return;
+    sharedCheckDone.current = true;
+
+    const seenKey = "perigee_seen_shared_meals";
+    const seen: string[] = JSON.parse(localStorage.getItem(seenKey) ?? "[]");
+    const seenSet = new Set(seen);
+
+    const shared = meals.filter((m) => m.source === "shared");
+    const freshlyShared = shared.filter((m) => !seenSet.has(m.id));
+
+    localStorage.setItem(
+      seenKey,
+      JSON.stringify(shared.map((m) => m.id)),
+    );
+
+    if (freshlyShared.length === 0) return;
+
+    const name =
+      partner.status === "active" && partner.partner
+        ? (partner.partner.display_name ?? partner.partner.email.split("@")[0])
+        : "Your partner";
+    const message =
+      freshlyShared.length === 1
+        ? `${name} shared a meal with you`
+        : `${name} shared ${freshlyShared.length} meals with you`;
+
+    // Deferred so the state update happens outside the effect body itself.
+    queueMicrotask(() => {
+      setNewSharedIds(new Set(freshlyShared.map((m) => m.id)));
+      setBanner(message);
+      setTimeout(() => setBanner(null), 5000);
+    });
+  }, [meals, partner]);
+
   async function handleActivitySubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setActivitySubmitting(true);
@@ -202,6 +244,7 @@ export default function DashboardPage() {
   }
 
   async function handleDelete(id: string) {
+    setOpenMenuId(null);
     setMeals((prev) => prev?.filter((m) => m.id !== id) ?? null);
     try {
       await api.delete(`/api/meals/${id}`);
@@ -217,6 +260,7 @@ export default function DashboardPage() {
     try {
       await api.post(`/api/meals/${id}/share`, {});
       setSharedIds((prev) => new Set(prev).add(id));
+      setOpenMenuId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to share meal");
     } finally {
@@ -474,11 +518,11 @@ export default function DashboardPage() {
           <div className="rounded-xl border border-border bg-surface p-5 shadow-soft">
             <button
               onClick={() => setActivityOpen((o) => !o)}
-              className="flex w-full items-center justify-between text-left"
+              className="group flex w-full items-center justify-between text-left"
             >
               <div>
                 <p className="label-xs">Activity</p>
-                <p className="mt-1 text-base font-semibold tracking-tight">
+                <p className="mt-1 text-base font-semibold tracking-tight transition-colors group-hover:text-accent">
                   {activity?.calories_burned
                     ? `${activity.calories_burned} cal burned`
                     : "Log activity"}
@@ -495,7 +539,7 @@ export default function DashboardPage() {
                   </p>
                 )}
               </div>
-              <span className="text-xs text-muted">
+              <span className="text-xs text-muted transition-colors group-hover:text-foreground">
                 {activityOpen ? "Close" : "Edit"}
               </span>
             </button>
@@ -634,46 +678,77 @@ export default function DashboardPage() {
               Nothing logged yet today.
             </p>
           )}
-          {meals?.map((m) => (
-            <div
-              key={m.id}
-              className="flex items-center justify-between rounded-xl border border-border bg-surface px-4 py-2.5"
-            >
-              <div>
-                <p className="text-[13px] font-medium">{m.name}</p>
-                <p className="text-xs text-muted">
-                  {m.calories} cal · {m.meal_type}
-                  {m.source === "photo" && m.ai_confidence && (
-                    <> · {m.ai_confidence} confidence</>
+          {meals?.map((m) => {
+            const isShared = sharedIds.has(m.id);
+            const isNewShared = newSharedIds.has(m.id);
+            return (
+              <div
+                key={m.id}
+                className={`relative flex items-center justify-between rounded-xl border border-border bg-surface px-4 py-2.5 ${
+                  isNewShared ? "animate-shared-in" : ""
+                }`}
+              >
+                <div>
+                  <p className="text-[13px] font-medium">{m.name}</p>
+                  <p className="text-xs text-muted">
+                    {m.calories} cal · {m.meal_type}
+                    {m.source === "photo" && m.ai_confidence && (
+                      <> · {m.ai_confidence} confidence</>
+                    )}
+                  </p>
+                  {(isShared || m.source === "shared") && (
+                    <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
+                      ✓ {m.source === "shared" ? "Shared with you" : `Shared with ${partnerName}`}
+                    </span>
                   )}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                {partnerName && (
-                  <button
-                    onClick={() => handleShare(m.id)}
-                    disabled={sharingId === m.id || sharedIds.has(m.id)}
-                    className="text-[13px] text-muted hover:text-accent transition-colors disabled:opacity-60"
-                  >
-                    {sharedIds.has(m.id)
-                      ? "Shared ✓"
-                      : sharingId === m.id
-                        ? "Sharing…"
-                        : `Share with ${partnerName}`}
-                  </button>
-                )}
+                </div>
+
                 <button
-                  onClick={() => handleDelete(m.id)}
-                  className="text-[13px] text-muted hover:text-danger transition-colors"
-                  aria-label={`Delete ${m.name}`}
+                  onClick={() => setOpenMenuId((id) => (id === m.id ? null : m.id))}
+                  aria-label={`More actions for ${m.name}`}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
                 >
-                  Delete
+                  <MoreVertical size={16} />
                 </button>
+
+                {openMenuId === m.id && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setOpenMenuId(null)}
+                    />
+                    <div className="absolute right-4 top-11 z-20 w-52 overflow-hidden rounded-lg border border-border bg-surface shadow-soft">
+                      {partnerName && !isShared && m.source !== "shared" && (
+                        <button
+                          onClick={() => handleShare(m.id)}
+                          disabled={sharingId === m.id}
+                          className="flex w-full items-center px-3 py-2 text-left text-[13px] text-muted transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-60"
+                        >
+                          {sharingId === m.id ? "Sharing…" : `Share with ${partnerName}`}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDelete(m.id)}
+                        className="flex w-full items-center px-3 py-2 text-left text-[13px] text-danger transition-colors hover:bg-surface-2"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </main>
+
+      {banner && (
+        <div className="fixed inset-x-0 bottom-6 flex justify-center px-6">
+          <div className="flex items-center gap-2 rounded-lg bg-foreground px-4 py-2.5 text-[13px] text-background shadow-lg">
+            🎉 {banner}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

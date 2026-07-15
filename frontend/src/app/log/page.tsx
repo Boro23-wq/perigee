@@ -159,6 +159,7 @@ export default function LogPage() {
       setPhotoResult(meal);
       setAdjustedCalories(meal.calories);
       setPhotoStatus("result");
+      showToast(`Logged ${meal.name}`, meal.id);
     } catch (err) {
       setPhotoError(err instanceof Error ? err.message : "Failed to analyze photo");
       setPhotoStatus("error");
@@ -594,7 +595,7 @@ export default function LogPage() {
             <span className="text-[13px]">{toast.message}</span>
             <button
               onClick={toast.onUndo}
-              className="text-[13px] font-medium text-accent"
+              className="text-[13px] font-medium text-accent transition-opacity hover:opacity-70"
             >
               Undo
             </button>
