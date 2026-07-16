@@ -270,13 +270,20 @@ export default function ProfilePage() {
                     disabled={notificationsBusy}
                     role="switch"
                     aria-checked={notificationsOn}
-                    className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
+                    style={{ width: "44px", height: "24px" }}
+                    className={`relative shrink-0 rounded-full transition-colors disabled:opacity-50 ${
                       notificationsOn ? "bg-accent" : "bg-surface-2"
                     }`}
                   >
                     <span
-                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                        notificationsOn ? "translate-x-5" : "translate-x-0.5"
+                      style={{
+                        width: "20px",
+                        height: "20px",
+                        top: "2px",
+                        left: "2px",
+                      }}
+                      className={`absolute rounded-full bg-white shadow transition-transform ${
+                        notificationsOn ? "translate-x-5" : "translate-x-0"
                       }`}
                     />
                   </button>
