@@ -35,30 +35,54 @@ export async function subscribeToPush() {
     throw new Error("Notification permission was not granted");
   }
 
-  const { public_key } = await api.get("/api/push/vapid-public-key");
+  let public_key: string;
+  try {
+    ({ public_key } = await api.get("/api/push/vapid-public-key"));
+  } catch (err) {
+    throw new Error(
+      `[fetch-key] ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
   let applicationServerKey: Uint8Array<ArrayBuffer>;
   try {
     applicationServerKey = urlBase64ToUint8Array(public_key);
-  } catch {
-    applicationServerKey = new Uint8Array(new ArrayBuffer(0));
+  } catch (err) {
+    throw new Error(
+      `[decode-key len=${public_key?.length ?? "null"}] ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
   // A valid VAPID key is an uncompressed P-256 point: exactly 65 bytes,
   // leading 0x04. Anything else means the server-side key is missing or
-  // malformed — catch it here with a clear message instead of letting
-  // pushManager.subscribe() reject with an opaque WebKit parsing error.
+  // malformed.
   if (applicationServerKey.length !== 65 || applicationServerKey[0] !== 0x04) {
-    throw new Error("Push notifications aren't available right now");
+    throw new Error(
+      `[bad-key bytes=${applicationServerKey.length} first=${applicationServerKey[0]}]`,
+    );
   }
 
-  const registration = await navigator.serviceWorker.ready;
+  let registration: ServiceWorkerRegistration;
+  try {
+    registration = await navigator.serviceWorker.ready;
+  } catch (err) {
+    throw new Error(
+      `[sw-ready] ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   // A stale subscription created with a different (e.g. rotated) VAPID key
   // makes subscribe() reject rather than transparently re-subscribe — clear
   // it first so this always converges to a subscription under the current
   // key instead of silently failing and leaving the old one in place.
-  const existing = await registration.pushManager.getSubscription();
-  if (existing) {
-    await existing.unsubscribe();
+  try {
+    const existing = await registration.pushManager.getSubscription();
+    if (existing) {
+      await existing.unsubscribe();
+    }
+  } catch (err) {
+    throw new Error(
+      `[clear-existing] ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 
   let subscription: PushSubscription;
@@ -67,15 +91,23 @@ export async function subscribeToPush() {
       userVisibleOnly: true,
       applicationServerKey,
     });
-  } catch {
-    throw new Error("Push notifications aren't available right now");
+  } catch (err) {
+    const name = err instanceof Error ? err.name : "Unknown";
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`[subscribe ${name}] ${message}`);
   }
 
-  const json = subscription.toJSON();
-  await api.post("/api/push/subscribe", {
-    endpoint: json.endpoint,
-    keys: { p256dh: json.keys?.p256dh, auth: json.keys?.auth },
-  });
+  try {
+    const json = subscription.toJSON();
+    await api.post("/api/push/subscribe", {
+      endpoint: json.endpoint,
+      keys: { p256dh: json.keys?.p256dh, auth: json.keys?.auth },
+    });
+  } catch (err) {
+    throw new Error(
+      `[save-subscription] ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   return subscription;
 }
