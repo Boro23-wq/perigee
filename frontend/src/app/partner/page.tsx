@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { Flame, Hand } from "lucide-react";
+import { Check, Flame, Hand } from "lucide-react";
 import { api } from "@/lib/api";
 import { timeAgo } from "@/lib/date";
 import { AppHeader } from "@/components/AppHeader";
@@ -51,6 +51,15 @@ export default function PartnerPage() {
     setStatus(data);
   }
 
+  async function loadRecentPokes() {
+    try {
+      const pokes = await api.get("/api/partner/pokes/recent");
+      setRecentPokes(pokes.pokes);
+    } catch {
+      // best-effort refresh — leave the existing list in place on failure
+    }
+  }
+
   useEffect(() => {
     async function run() {
       try {
@@ -59,14 +68,25 @@ export default function PartnerPage() {
         if (data.status === "active") {
           const cmp = await api.get("/api/partner/comparison");
           setComparison(cmp);
-          const pokes = await api.get("/api/partner/pokes/recent");
-          setRecentPokes(pokes.pokes);
+          await loadRecentPokes();
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load");
       }
     }
     run();
+
+    function onFocus() {
+      if (document.visibilityState === "visible") {
+        loadRecentPokes();
+      }
+    }
+    document.addEventListener("visibilitychange", onFocus);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", onFocus);
+      window.removeEventListener("focus", onFocus);
+    };
   }, []);
 
   async function handlePoke() {
@@ -77,6 +97,7 @@ export default function PartnerPage() {
       setPokedToday(true);
       setPokeBanner(`Poked ${partnerName ?? "your partner"}!`);
       setTimeout(() => setPokeBanner(null), 5000);
+      loadRecentPokes();
     } catch (err) {
       if (err instanceof Error && err.message.includes("already poked")) {
         setPokedToday(true);
@@ -234,8 +255,11 @@ export default function PartnerPage() {
             <div className="mt-3 grid grid-cols-2 gap-3">
               <div>
                 <p className="text-[13px] text-muted">You</p>
-                <p className="mt-1 text-sm font-medium">
-                  {comparison.me.logged_today ? "✓ Logged" : "Not logged yet"}
+                <p className="mt-1 flex items-center gap-1 text-sm font-medium">
+                  {comparison.me.logged_today && (
+                    <Check size={14} className="text-accent" />
+                  )}
+                  {comparison.me.logged_today ? "Logged" : "Not logged yet"}
                 </p>
                 <div className="mt-1 flex items-center gap-1 text-xs text-muted">
                   <Flame
@@ -247,8 +271,11 @@ export default function PartnerPage() {
               </div>
               <div>
                 <p className="text-[13px] text-muted">{partnerName}</p>
-                <p className="mt-1 text-sm font-medium">
-                  {comparison.partner.logged_today ? "✓ Logged" : "Not logged yet"}
+                <p className="mt-1 flex items-center gap-1 text-sm font-medium">
+                  {comparison.partner.logged_today && (
+                    <Check size={14} className="text-accent" />
+                  )}
+                  {comparison.partner.logged_today ? "Logged" : "Not logged yet"}
                 </p>
                 <div className="mt-1 flex items-center gap-1 text-xs text-muted">
                   <Flame
@@ -263,9 +290,10 @@ export default function PartnerPage() {
             <button
               onClick={handlePoke}
               disabled={poking || pokedToday}
-              className="mt-4 w-full rounded-lg border border-border bg-surface-2 px-4 py-2 text-[13px] font-medium transition-colors hover:border-accent disabled:opacity-60"
+              className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-surface-2 px-4 py-2 text-[13px] font-medium transition-colors hover:border-accent disabled:opacity-60"
             >
-              {pokedToday ? "Poked today ✓" : poking ? "Poking…" : `Poke ${partnerName}`}
+              {pokedToday && <Check size={14} className="text-accent" />}
+              {pokedToday ? "Poked today" : poking ? "Poking…" : `Poke ${partnerName}`}
             </button>
           </div>
         )}
