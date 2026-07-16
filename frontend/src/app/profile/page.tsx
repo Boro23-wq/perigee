@@ -442,6 +442,10 @@ export default function ProfilePage() {
                 </button>
               </form>
             </section>
+
+            <p className="mt-8 text-center text-[11px] text-muted-2">
+              build {process.env.NEXT_PUBLIC_BUILD_SHA}
+            </p>
           </>
         )}
       </main>

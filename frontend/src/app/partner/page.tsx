@@ -94,16 +94,21 @@ export default function PartnerPage() {
   async function handlePoke() {
     setPoking(true);
     setError("");
+    // Optimistic: flip the button and show the banner immediately rather
+    // than waiting on the round trip — roll both back if the request
+    // actually fails for a reason other than "already poked today".
+    setPokedToday(true);
+    setPokeBanner(`Poked ${partnerName ?? "your partner"}!`);
+    setTimeout(() => setPokeBanner(null), 5000);
     try {
       await api.post("/api/partner/poke", {});
-      setPokedToday(true);
-      setPokeBanner(`Poked ${partnerName ?? "your partner"}!`);
-      setTimeout(() => setPokeBanner(null), 5000);
       loadRecentPokes();
     } catch (err) {
       if (err instanceof Error && err.message.includes("already poked")) {
-        setPokedToday(true);
+        // Already true optimistically — nothing to do.
       } else {
+        setPokedToday(false);
+        setPokeBanner(null);
         setError(err instanceof Error ? err.message : "Failed to poke");
       }
     } finally {
