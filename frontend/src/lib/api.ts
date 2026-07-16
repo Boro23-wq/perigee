@@ -4,17 +4,38 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL!;
 
 async function request(path: string, options: RequestInit = {}) {
   const supabase = createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
 
-  const headers = new Headers(options.headers);
-  headers.set("Content-Type", "application/json");
-  if (session?.access_token) {
-    headers.set("Authorization", `Bearer ${session.access_token}`);
+  let session: { access_token: string } | null = null;
+  try {
+    const result = await supabase.auth.getSession();
+    session = result.data.session;
+  } catch (err) {
+    throw new Error(
+      `[${path} get-session] ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  let headers: Headers;
+  try {
+    headers = new Headers(options.headers);
+    headers.set("Content-Type", "application/json");
+    if (session?.access_token) {
+      headers.set("Authorization", `Bearer ${session.access_token}`);
+    }
+  } catch (err) {
+    throw new Error(
+      `[${path} build-headers tokenLen=${session?.access_token?.length ?? "null"}] ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  } catch (err) {
+    throw new Error(
+      `[${path} fetch] ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
