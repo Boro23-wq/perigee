@@ -82,5 +82,11 @@ func UnsubscribeFromPush(c *gin.Context) {
 // GetVapidPublicKey exposes the VAPID public key so the frontend doesn't
 // need it baked into the build — rotating the key needs no redeploy.
 func GetVapidPublicKey(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"public_key": os.Getenv("VAPID_PUBLIC_KEY")})
+	key := os.Getenv("VAPID_PUBLIC_KEY")
+	if key == "" {
+		log.Printf("GetVapidPublicKey error: VAPID_PUBLIC_KEY is not set")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "push notifications are not configured"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"public_key": key})
 }

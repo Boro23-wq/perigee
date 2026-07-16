@@ -70,6 +70,7 @@ func GetMe(c *gin.Context) {
 
 type updateProfileRequest struct {
 	DisplayName        *string  `json:"display_name"`
+	Timezone           *string  `json:"timezone"`
 	HeightIn           *float64 `json:"height_in"`
 	DailyCalorieBudget *int     `json:"daily_calorie_budget"`
 	WeightGoalLbs      *float64 `json:"weight_goal_lbs"`
@@ -121,6 +122,12 @@ func UpdateProfile(c *gin.Context) {
 			return
 		}
 	}
+	if req.Timezone != nil {
+		if _, err := time.LoadLocation(*req.Timezone); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "timezone must be a valid IANA timezone name"})
+			return
+		}
+	}
 	if req.AvatarPath != nil && !strings.HasPrefix(*req.AvatarPath, userID+"/") {
 		c.JSON(http.StatusForbidden, gin.H{"error": "avatar path does not belong to this user"})
 		return
@@ -140,6 +147,9 @@ func UpdateProfile(c *gin.Context) {
 
 	if req.DisplayName != nil {
 		sets = append(sets, "display_name = "+next(*req.DisplayName))
+	}
+	if req.Timezone != nil {
+		sets = append(sets, "timezone = "+next(*req.Timezone))
 	}
 	if req.HeightIn != nil {
 		sets = append(sets, "height_in = "+next(*req.HeightIn))

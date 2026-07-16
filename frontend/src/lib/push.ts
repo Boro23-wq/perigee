@@ -36,10 +36,17 @@ export async function subscribeToPush() {
   }
 
   const { public_key } = await api.get("/api/push/vapid-public-key");
+  let applicationServerKey: Uint8Array;
+  try {
+    applicationServerKey = urlBase64ToUint8Array(public_key);
+  } catch {
+    throw new Error("Push notifications aren't available right now");
+  }
+
   const registration = await navigator.serviceWorker.ready;
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(public_key),
+    applicationServerKey,
   });
 
   const json = subscription.toJSON();

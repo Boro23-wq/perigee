@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -17,8 +17,28 @@ import {
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { api } from "@/lib/api";
 import { Logo } from "./Logo";
 import { ThemeToggle } from "./ThemeToggle";
+
+const TIMEZONE_SYNC_KEY = "perigee:timezone-synced";
+
+// The server needs the user's real IANA timezone to know what "today" means
+// for streaks/pokes (profiles default to America/Chicago at signup and are
+// otherwise never updated). Sync it once per browser session — cheap no-op
+// on the backend if it already matches.
+function syncTimezone() {
+  if (typeof window === "undefined") return;
+  if (sessionStorage.getItem(TIMEZONE_SYNC_KEY)) return;
+
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (!timezone) return;
+
+  api
+    .patch("/api/me", { timezone })
+    .then(() => sessionStorage.setItem(TIMEZONE_SYNC_KEY, "1"))
+    .catch(() => {});
+}
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: Home, pinned: true },
@@ -41,6 +61,10 @@ export function AppHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    syncTimezone();
+  }, []);
 
   async function handleLogout() {
     const supabase = createClient();
