@@ -49,7 +49,7 @@ func SubscribeToPush(c *gin.Context) {
 		return
 	}
 
-	c.Status(http.StatusCreated)
+	c.Status(http.StatusNoContent)
 }
 
 type unsubscribePushRequest struct {

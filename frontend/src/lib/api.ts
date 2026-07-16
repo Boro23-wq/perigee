@@ -42,11 +42,12 @@ async function request(path: string, options: RequestInit = {}) {
     throw new Error(body.error ?? `Request failed: ${res.status}`);
   }
 
-  if (res.status === 204) {
+  if (res.status === 204 || res.headers.get("content-length") === "0") {
     return null;
   }
 
-  return res.json();
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 
 export const api = {
