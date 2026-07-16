@@ -40,14 +40,36 @@ export async function subscribeToPush() {
   try {
     applicationServerKey = urlBase64ToUint8Array(public_key);
   } catch {
+    applicationServerKey = new Uint8Array(new ArrayBuffer(0));
+  }
+  // A valid VAPID key is an uncompressed P-256 point: exactly 65 bytes,
+  // leading 0x04. Anything else means the server-side key is missing or
+  // malformed — catch it here with a clear message instead of letting
+  // pushManager.subscribe() reject with an opaque WebKit parsing error.
+  if (applicationServerKey.length !== 65 || applicationServerKey[0] !== 0x04) {
     throw new Error("Push notifications aren't available right now");
   }
 
   const registration = await navigator.serviceWorker.ready;
-  const subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey,
-  });
+
+  // A stale subscription created with a different (e.g. rotated) VAPID key
+  // makes subscribe() reject rather than transparently re-subscribe — clear
+  // it first so this always converges to a subscription under the current
+  // key instead of silently failing and leaving the old one in place.
+  const existing = await registration.pushManager.getSubscription();
+  if (existing) {
+    await existing.unsubscribe();
+  }
+
+  let subscription: PushSubscription;
+  try {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey,
+    });
+  } catch {
+    throw new Error("Push notifications aren't available right now");
+  }
 
   const json = subscription.toJSON();
   await api.post("/api/push/subscribe", {
