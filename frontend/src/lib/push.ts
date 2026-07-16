@@ -19,6 +19,20 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   return outputArray;
 }
 
+// iOS Safari's PushSubscription.toJSON() has real, long-standing bugs
+// serializing the key material (throws a native "string did not match the
+// expected pattern" error rather than returning JSON). Read the raw key
+// bytes via getKey() and base64url-encode them ourselves instead of relying
+// on toJSON().
+function bufferToBase64Url(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 export async function getCurrentPushSubscription() {
   if (!pushSupported()) return null;
   const registration = await navigator.serviceWorker.ready;
@@ -97,11 +111,26 @@ export async function subscribeToPush() {
     throw new Error(`[subscribe ${name}] ${message}`);
   }
 
+  let p256dh: string;
+  let auth: string;
   try {
-    const json = subscription.toJSON();
+    const p256dhKey = subscription.getKey("p256dh");
+    const authKey = subscription.getKey("auth");
+    if (!p256dhKey || !authKey) {
+      throw new Error("missing key material on subscription");
+    }
+    p256dh = bufferToBase64Url(p256dhKey);
+    auth = bufferToBase64Url(authKey);
+  } catch (err) {
+    throw new Error(
+      `[serialize-subscription] ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  try {
     await api.post("/api/push/subscribe", {
-      endpoint: json.endpoint,
-      keys: { p256dh: json.keys?.p256dh, auth: json.keys?.auth },
+      endpoint: subscription.endpoint,
+      keys: { p256dh, auth },
     });
   } catch (err) {
     throw new Error(
