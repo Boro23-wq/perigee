@@ -27,6 +27,7 @@ type ComparisonSide = {
 type Comparison = {
   me: ComparisonSide;
   partner: ComparisonSide;
+  poked_today: boolean;
 };
 
 type RecentPoke = {
@@ -68,6 +69,7 @@ export default function PartnerPage() {
         if (data.status === "active") {
           const cmp = await api.get("/api/partner/comparison");
           setComparison(cmp);
+          setPokedToday(cmp.poked_today);
           await loadRecentPokes();
         }
       } catch (err) {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -30,8 +29,9 @@ type comparisonSide struct {
 }
 
 type partnerComparison struct {
-	Me      comparisonSide `json:"me"`
-	Partner comparisonSide `json:"partner"`
+	Me         comparisonSide `json:"me"`
+	Partner    comparisonSide `json:"partner"`
+	PokedToday bool           `json:"poked_today"`
 }
 
 func sideFor(ctx context.Context, userID string) (comparisonSide, error) {
@@ -70,7 +70,27 @@ func GetPartnerComparison(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, partnerComparison{Me: me, Partner: partner})
+	var timezone string
+	if err := db.Pool.QueryRow(c.Request.Context(),
+		`SELECT timezone FROM public.profiles WHERE id = $1`, userID,
+	).Scan(&timezone); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "profile not found"})
+		return
+	}
+
+	var pokedToday bool
+	if err := db.Pool.QueryRow(c.Request.Context(),
+		`SELECT EXISTS(
+			SELECT 1 FROM public.pokes
+			WHERE sender_id = $1 AND recipient_id = $2 AND date = $3
+		)`,
+		userID, partnerID, localToday(timezone),
+	).Scan(&pokedToday); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load poke status"})
+		return
+	}
+
+	c.JSON(http.StatusOK, partnerComparison{Me: me, Partner: partner, PokedToday: pokedToday})
 }
 
 // PokePartner sends a lightweight nudge to the caller's active partner. The
@@ -92,11 +112,6 @@ func PokePartner(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "profile not found"})
 		return
 	}
-	loc, err := time.LoadLocation(timezone)
-	if err != nil {
-		loc = time.UTC
-	}
-	today := time.Now().In(loc).Format("2006-01-02")
 
 	var id string
 	err = db.Pool.QueryRow(c.Request.Context(),
@@ -104,7 +119,7 @@ func PokePartner(c *gin.Context) {
 		 VALUES ($1, $2, $3)
 		 ON CONFLICT (sender_id, recipient_id, date) DO NOTHING
 		 RETURNING id`,
-		userID, partnerID, today,
+		userID, partnerID, localToday(timezone),
 	).Scan(&id)
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "already poked your partner today"})

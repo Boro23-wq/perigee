@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Flame, MoreVertical, X } from "lucide-react";
+import { ArrowRight, Check, Flame, MoreVertical, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { api } from "@/lib/api";
 import { localDateString } from "@/lib/date";
@@ -1046,7 +1046,8 @@ export default function DashboardPage() {
                       </div>
                       {(isShared || m.source === "shared") && (
                         <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
-                          ✓ {m.source === "shared" ? "Shared with you" : `Shared with ${partnerName}`}
+                          <Check size={11} />
+                          {m.source === "shared" ? "Shared with you" : `Shared with ${partnerName}`}
                         </span>
                       )}
                     </div>
