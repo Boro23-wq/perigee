@@ -3,8 +3,10 @@ package push
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log"
 	"os"
+	"strings"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 
@@ -47,7 +49,14 @@ func SendToUser(ctx context.Context, userID, title, body, url string) error {
 	}
 
 	options := &webpush.Options{
-		Subscriber:      os.Getenv("VAPID_SUBJECT"),
+		// webpush-go prepends "mailto:" to the subscriber unless it already
+		// starts with "https:" — it does NOT check for an existing "mailto:"
+		// prefix, so passing one in produces "mailto:mailto:...", which
+		// Chrome/FCM silently tolerates but Apple's push service rejects
+		// outright as an invalid VAPID JWT ("BadJwtToken", 403, on every
+		// single send). Stripping any prefix we were given here means this
+		// can't happen regardless of how VAPID_SUBJECT is set.
+		Subscriber:      strings.TrimPrefix(os.Getenv("VAPID_SUBJECT"), "mailto:"),
 		VAPIDPublicKey:  os.Getenv("VAPID_PUBLIC_KEY"),
 		VAPIDPrivateKey: os.Getenv("VAPID_PRIVATE_KEY"),
 		TTL:             3600,
@@ -62,6 +71,7 @@ func SendToUser(ctx context.Context, userID, title, body, url string) error {
 			log.Printf("push send error for user %s: %v", userID, err)
 			continue
 		}
+		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 
 		if resp.StatusCode == 404 || resp.StatusCode == 410 {
@@ -70,6 +80,13 @@ func SendToUser(ctx context.Context, userID, title, body, url string) error {
 			); err != nil {
 				log.Printf("failed to remove stale push subscription: %v", err)
 			}
+			continue
+		}
+		// A 201/2xx here means the push service accepted it — anything else
+		// (e.g. a 403 from a malformed VAPID JWT) previously vanished
+		// silently since only err != nil and 404/410 were ever handled.
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			log.Printf("push send non-2xx for user %s (%d): %s", userID, resp.StatusCode, string(body))
 		}
 	}
 
