@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -10,6 +12,24 @@ import (
 	"github.com/Boro23-wq/perigee/backend/db"
 	"github.com/Boro23-wq/perigee/backend/push"
 )
+
+// pokeBodies are playful rather than the old flat "checking in on you" —
+// %s is the sender's display name (or email if they haven't set one).
+var pokeBodies = []string{
+	"%s just poked you. Poke them back!",
+	"%s is side-eyeing your streak 👀",
+	"Boop! %s poked you.",
+	"%s wants to know if you've eaten today 🍽️",
+	"%s is stalking your calorie log.",
+	"Incoming poke from %s. Don't leave them on read.",
+}
+
+// pokeMessage picks a random title/body pair for the push notification a
+// poke triggers — same info every time (who poked), just not the same
+// flat sentence.
+func pokeMessage(senderName string) (title, body string) {
+	return "👉 Poke!", fmt.Sprintf(pokeBodies[rand.Intn(len(pokeBodies))], senderName)
+}
 
 // activePartnerID resolves the caller's active partner, if any.
 func activePartnerID(ctx context.Context, userID string) (string, error) {
@@ -137,7 +157,8 @@ func PokePartner(c *gin.Context) {
 				name = sender.Email
 			}
 		}
-		if err := push.SendToUser(ctx, partnerID, "Poke!", name+" is checking in on you.", "/partner"); err != nil {
+		title, body := pokeMessage(name)
+		if err := push.SendToUser(ctx, partnerID, title, body, "/partner"); err != nil {
 			log.Printf("PokePartner push error: %v", err)
 		}
 	}()
