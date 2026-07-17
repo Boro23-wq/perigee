@@ -224,6 +224,110 @@ func AdjustMeal(c *gin.Context) {
 	c.JSON(http.StatusOK, m)
 }
 
+type refinePhotoMealRequest struct {
+	Notes string `json:"notes"`
+}
+
+// RefinePhotoMeal re-runs vision on a photo-logged meal's original image,
+// this time combined with the user's own stated portions/ingredients (e.g.
+// "215g chicken, 100g cilantro rice") — for when they know precisely what
+// they ate and the pure visual guess isn't accurate enough. This replaces
+// the estimate with a new one grounded in both the photo and their text,
+// not a manual override of individual macros.
+func RefinePhotoMeal(c *gin.Context) {
+	userID := c.GetString("user_id")
+	id := c.Param("id")
+
+	var req refinePhotoMealRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	notes := strings.TrimSpace(req.Notes)
+	if notes == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "notes is required"})
+		return
+	}
+	if len(notes) > 500 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "notes must be 500 characters or fewer"})
+		return
+	}
+
+	var photoPath *string
+	if err := db.Pool.QueryRow(c.Request.Context(),
+		`SELECT photo_path FROM public.food_logs WHERE id = $1 AND user_id = $2`,
+		id, userID,
+	).Scan(&photoPath); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "meal not found"})
+		return
+	}
+	if photoPath == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "meal has no photo to refine"})
+		return
+	}
+
+	readURL, err := storage.CreateSignedReadURL(*photoPath, 300)
+	if err != nil {
+		log.Printf("RefinePhotoMeal CreateSignedReadURL error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read photo"})
+		return
+	}
+	imageBytes, contentType, err := storage.DownloadBytes(readURL, maxPhotoBytes)
+	if err != nil {
+		log.Printf("RefinePhotoMeal DownloadBytes error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read photo"})
+		return
+	}
+
+	estimate, err := vision.EstimateFromImageWithHint(imageBytes, contentType, notes)
+	if err != nil {
+		log.Printf("RefinePhotoMeal EstimateFromImageWithHint error: %v", err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to refine estimate, try again"})
+		return
+	}
+
+	calories := estimate.Calories
+	if calories < 0 {
+		calories = 0
+	}
+	if calories > 10000 {
+		calories = 10000
+	}
+	protein := estimate.Protein
+	carbs := estimate.Carbs
+	fat := estimate.Fat
+	fiber := estimate.Fiber
+	if protein < 0 {
+		protein = 0
+	}
+	if carbs < 0 {
+		carbs = 0
+	}
+	if fat < 0 {
+		fat = 0
+	}
+	if fiber < 0 {
+		fiber = 0
+	}
+
+	row := db.Pool.QueryRow(c.Request.Context(),
+		`UPDATE public.food_logs
+		 SET name = $1, calories = $2, protein = $3, carbs = $4, fat = $5, fiber = $6,
+		     detected_food = $1, ai_confidence = $7, user_adjusted = true, notes = $8
+		 WHERE id = $9 AND user_id = $10
+		 RETURNING `+mealColumns,
+		estimate.Name, calories, protein, carbs, fat, fiber, estimate.Confidence, notes, id, userID,
+	)
+	m, err := scanMeal(row)
+	if err != nil {
+		log.Printf("RefinePhotoMeal update error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update meal"})
+		return
+	}
+
+	c.JSON(http.StatusOK, m)
+}
+
 // GetMealPhotoURL returns a short-lived signed URL for a meal's photo, scoped
 // to the authenticated owner.
 func GetMealPhotoURL(c *gin.Context) {

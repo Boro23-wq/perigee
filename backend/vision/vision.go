@@ -36,6 +36,20 @@ var jsonFence = regexp.MustCompile("(?s)```(?:json)?\\s*(.*?)\\s*```")
 
 // EstimateFromImage sends imageBytes to Claude and parses its JSON reply.
 func EstimateFromImage(imageBytes []byte, mediaType string) (*Estimate, error) {
+	return estimateFromImage(imageBytes, mediaType, "")
+}
+
+// EstimateFromImageWithHint re-estimates the same photo, but with the
+// user's own stated portions/ingredients folded into the prompt — e.g. "215g
+// chicken, 100g cilantro rice" — for when they know precisely what they ate
+// and the visual guess alone isn't accurate enough. The photo is still sent;
+// this combines both rather than replacing the image with a pure text-based
+// guess.
+func EstimateFromImageWithHint(imageBytes []byte, mediaType, hint string) (*Estimate, error) {
+	return estimateFromImage(imageBytes, mediaType, hint)
+}
+
+func estimateFromImage(imageBytes []byte, mediaType, hint string) (*Estimate, error) {
 	apiKey := os.Getenv("ANTHROPIC_API_KEY")
 	if apiKey == "" {
 		return nil, fmt.Errorf("ANTHROPIC_API_KEY not configured")
@@ -43,6 +57,11 @@ func EstimateFromImage(imageBytes []byte, mediaType string) (*Estimate, error) {
 	model := os.Getenv("ANTHROPIC_MODEL")
 	if model == "" {
 		return nil, fmt.Errorf("ANTHROPIC_MODEL not configured")
+	}
+
+	promptText := prompt
+	if hint != "" {
+		promptText += fmt.Sprintf("\n\nThe user has told you the specific amounts they ate: %q. Combine this with what you see in the photo — trust their stated quantities and ingredients over your own visual portion guess where they overlap, but still use the photo to catch anything they didn't mention (sauces, oil, sides) and to sanity-check the overall dish.", hint)
 	}
 
 	b64 := base64.StdEncoding.EncodeToString(imageBytes)
@@ -61,7 +80,7 @@ func EstimateFromImage(imageBytes []byte, mediaType string) (*Estimate, error) {
 							"data":       b64,
 						},
 					},
-					{"type": "text", "text": prompt},
+					{"type": "text", "text": promptText},
 				},
 			},
 		},

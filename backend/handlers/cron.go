@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"log"
+	"math/rand"
 	"net/http"
 	"time"
 
@@ -11,6 +12,22 @@ import (
 	"github.com/Boro23-wq/perigee/backend/db"
 	"github.com/Boro23-wq/perigee/backend/push"
 )
+
+// Short, Duolingo-style one-liners — a single punchy beat per notification,
+// not a full descriptive sentence.
+var morningReminderBodies = []string{
+	"Quick nudge — hop on the scale ⚖️",
+	"60 seconds, then the day's yours.",
+	"Scale o'clock.",
+	"One number, then coffee ☕",
+}
+
+var eveningReminderBodies = []string{
+	"Nothing logged today yet 👀",
+	"Still time to log today.",
+	"Kloppo's waiting on today's food.",
+	"Don't let today slip by unlogged.",
+}
 
 type profileMatch struct {
 	userID   string
@@ -73,7 +90,7 @@ func CronMorningReminder(c *gin.Context) {
 			continue
 		}
 		if err := push.SendToUser(c.Request.Context(), m.userID,
-			"Morning weigh-in", "Don't forget to log today's weight.", "/weight"); err != nil {
+			"⚖️ Weigh-in", morningReminderBodies[rand.Intn(len(morningReminderBodies))], "/weight"); err != nil {
 			log.Printf("CronMorningReminder push error for %s: %v", m.userID, err)
 			continue
 		}
@@ -102,7 +119,7 @@ func CronEveningReminder(c *gin.Context) {
 			continue
 		}
 		if err := push.SendToUser(c.Request.Context(), m.userID,
-			"Log today's meals", "You haven't logged anything today yet.", "/log"); err != nil {
+			"🍽️ Log time", eveningReminderBodies[rand.Intn(len(eveningReminderBodies))], "/log"); err != nil {
 			log.Printf("CronEveningReminder push error for %s: %v", m.userID, err)
 			continue
 		}
@@ -143,7 +160,7 @@ func CronCheckMilestones(c *gin.Context) {
 		}
 		for _, m := range pending {
 			if err := push.SendToUser(c.Request.Context(), userID,
-				"Milestone reached!", m.Label, "/dashboard"); err != nil {
+				"🎉 Milestone!", m.Label, "/dashboard"); err != nil {
 				log.Printf("CronCheckMilestones push error for %s: %v", userID, err)
 				continue
 			}

@@ -13,15 +13,16 @@ import (
 	"github.com/Boro23-wq/perigee/backend/push"
 )
 
-// pokeBodies are playful rather than the old flat "checking in on you" —
-// %s is the sender's display name (or email if they haven't set one).
+// pokeBodies are short, Duolingo-style one-liners — a single punchy beat,
+// not a full sentence. %s is the sender's display name (or email if they
+// haven't set one).
 var pokeBodies = []string{
-	"%s just poked you. Poke them back!",
-	"%s is side-eyeing your streak 👀",
-	"Boop! %s poked you.",
-	"%s wants to know if you've eaten today 🍽️",
-	"%s is stalking your calorie log.",
-	"Incoming poke from %s. Don't leave them on read.",
+	"%s poked you. Poke back?",
+	"%s is watching 👀",
+	"Boop! That was %s.",
+	"Nudge from %s 👋",
+	"%s says: log something!",
+	"%s is onto you.",
 }
 
 // pokeMessage picks a random title/body pair for the push notification a

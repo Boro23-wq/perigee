@@ -51,6 +51,7 @@ func main() {
 		api.DELETE("/meals/:id", handlers.DeleteMeal)
 		api.PATCH("/meals/:id", handlers.UpdateMeal)
 		api.PATCH("/meals/:id/adjust", handlers.AdjustMeal)
+		api.PATCH("/meals/:id/photo/refine", handlers.RefinePhotoMeal)
 		api.POST("/meals/:id/share", handlers.ShareMeal)
 		api.GET("/meals/:id/photo-url", handlers.GetMealPhotoURL)
 		api.POST("/meals/photo/upload-url", handlers.RequestPhotoUploadURL)
