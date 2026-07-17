@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Check, Flame, MoreVertical, X } from "lucide-react";
+import { ArrowRight, Bot, Check, Flame, MoreVertical, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { api } from "@/lib/api";
 import { localDateString } from "@/lib/date";
@@ -718,6 +718,14 @@ export default function DashboardPage() {
         <div className="flex items-baseline justify-between">
           <h1 className="text-xl font-semibold tracking-tight">Today</h1>
           <div className="flex items-center gap-2">
+            <Link
+              href="/coach"
+              aria-label="Talk to Kloppo, your AI coach"
+              title="Kloppo"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-2 hover:text-accent"
+            >
+              <Bot size={16} />
+            </Link>
             <span className="text-[13px] text-muted">
               {profile?.display_name || email || "Loading…"}
             </span>

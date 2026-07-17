@@ -227,13 +227,14 @@ func PostChatMessage(c *gin.Context) {
 	}
 	rows.Close()
 
-	contextSnapshot, err := buildChatContext(c.Request.Context(), userID)
+	contextSnapshot, today, err := buildChatContext(c.Request.Context(), userID)
 	if err != nil {
 		log.Printf("buildChatContext error: %v", err)
 		contextSnapshot = "{}"
+		today = time.Now().UTC().Format("2006-01-02")
 	}
 
-	reply, err := coach.Chat(history, contextSnapshot)
+	reply, err := coach.Chat(c.Request.Context(), userID, today, history, contextSnapshot)
 	if err != nil {
 		log.Printf("coach.Chat error: %v", err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "coach is unavailable right now"})
@@ -265,10 +266,12 @@ type chatContext struct {
 
 // buildChatContext assembles the real-numbers snapshot the chat is grounded
 // in — same philosophy as the daily check-in's Snapshot, just reused here.
-func buildChatContext(ctx context.Context, userID string) (string, error) {
+// Also returns the caller's local "today" separately (not just embedded in
+// the JSON) since coach.Chat needs it unparsed to scope tool calls.
+func buildChatContext(ctx context.Context, userID string) (snapshot, today string, err error) {
 	stats, err := computeWeeklyStats(ctx, userID)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	var goalWeightLbs *float64
@@ -277,16 +280,17 @@ func buildChatContext(ctx context.Context, userID string) (string, error) {
 	if err := db.Pool.QueryRow(ctx,
 		`SELECT weight_goal_lbs, goal_date, timezone FROM public.profiles WHERE id = $1`, userID,
 	).Scan(&goalWeightLbs, &goalDate, &timezone); err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	loc, err := time.LoadLocation(timezone)
 	if err != nil {
 		loc = time.UTC
 	}
+	today = time.Now().In(loc).Format("2006-01-02")
 
 	cc := chatContext{
-		Today:                   time.Now().In(loc).Format("2006-01-02"),
+		Today:                   today,
 		GoalWeightLbs:           goalWeightLbs,
 		GoalDate:                goalDate,
 		DailyCalorieBudget:      stats.DailyCalorieBudget,
@@ -300,7 +304,7 @@ func buildChatContext(ctx context.Context, userID string) (string, error) {
 
 	b, err := json.Marshal(cc)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return string(b), nil
+	return string(b), today, nil
 }

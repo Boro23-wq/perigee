@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/Skeleton";
 import { MealTypeBadge } from "@/components/MealTypeBadge";
 import { ConfidenceMeter } from "@/components/ConfidenceMeter";
 import { FoodPicker, type PickedFood } from "@/components/FoodPicker";
+import { X } from "lucide-react";
 
 type Usual = {
   name: string;
@@ -35,6 +36,7 @@ type PhotoMeal = {
   protein: number;
   carbs: number;
   fat: number;
+  fiber: number;
   ai_confidence: "low" | "medium" | "high" | null;
 };
 
@@ -81,6 +83,9 @@ export default function LogPage() {
   const [photoError, setPhotoError] = useState("");
   const [photoResult, setPhotoResult] = useState<PhotoMeal | null>(null);
   const [adjustedCalories, setAdjustedCalories] = useState(0);
+  const [refining, setRefining] = useState(false);
+  const [refinedIngredients, setRefinedIngredients] = useState<PickedFood[]>([]);
+  const [refineError, setRefineError] = useState("");
 
   const [scanning, setScanning] = useState(false);
   const [barcodeStatus, setBarcodeStatus] = useState<
@@ -136,6 +141,9 @@ export default function LogPage() {
 
     setPhotoStatus("processing");
     setPhotoError("");
+    setRefining(false);
+    setRefinedIngredients([]);
+    setRefineError("");
 
     try {
       const compressed = await imageCompression(file, {
@@ -187,6 +195,55 @@ export default function LogPage() {
         // slider stays interactive either way, user can nudge again
       }
     }, 400);
+  }
+
+  // Replaces the photo's AI-estimated macros with the sum of exact
+  // ingredients the user adds — for when they know precisely what they ate
+  // (e.g. "215g chicken, 100g rice") rather than trusting the vision
+  // estimate's blended guess. Reuses FoodPicker/UpdateMeal rather than
+  // inventing a separate ingredient-entry flow.
+  async function saveRefinedTotals(ingredients: PickedFood[]) {
+    if (!photoResult) return;
+    setRefineError("");
+
+    const totals = ingredients.reduce(
+      (acc, f) => ({
+        calories: acc.calories + f.calories,
+        protein: acc.protein + f.protein,
+        carbs: acc.carbs + f.carbs,
+        fat: acc.fat + f.fat,
+        fiber: acc.fiber + f.fiber,
+      }),
+      { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 }
+    );
+
+    try {
+      const updated: PhotoMeal = await api.patch(`/api/meals/${photoResult.id}`, {
+        name: photoResult.name,
+        meal_type: mealType,
+        calories: Math.round(totals.calories),
+        protein: totals.protein,
+        carbs: totals.carbs,
+        fat: totals.fat,
+        fiber: totals.fiber,
+      });
+      setPhotoResult(updated);
+      setAdjustedCalories(updated.calories);
+    } catch (err) {
+      setRefineError(err instanceof Error ? err.message : "Failed to update meal");
+    }
+  }
+
+  function handleAddRefinedIngredient(food: PickedFood) {
+    const updated = [...refinedIngredients, food];
+    setRefinedIngredients(updated);
+    saveRefinedTotals(updated);
+  }
+
+  function handleRemoveRefinedIngredient(index: number) {
+    const updated = refinedIngredients.filter((_, i) => i !== index);
+    setRefinedIngredients(updated);
+    saveRefinedTotals(updated);
   }
 
   async function handleBarcodeDetected(upc: string) {
@@ -379,8 +436,66 @@ export default function LogPage() {
                   Estimate: restaurant meals often have hidden oils/butter. Nudge up if
                   it was rich.
                 </p>
+
+                {!refining ? (
+                  <button
+                    onClick={() => setRefining(true)}
+                    className="mt-2 text-[12px] text-muted underline underline-offset-2 hover:text-foreground"
+                  >
+                    Know the exact amounts? Refine with ingredients
+                  </button>
+                ) : (
+                  <div className="mt-3 border-t border-border pt-3">
+                    <p className="text-[13px] font-medium text-muted">
+                      Refine with exact ingredients
+                    </p>
+                    <p className="mt-1 text-xs text-muted">
+                      Adding an ingredient replaces the estimate above with the sum of what
+                      you add — e.g. 215g chicken + 100g rice instead of one blended guess.
+                    </p>
+
+                    {refinedIngredients.length > 0 && (
+                      <ul className="mt-2 flex flex-col gap-1.5">
+                        {refinedIngredients.map((f, i) => (
+                          <li
+                            key={i}
+                            className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-[13px]"
+                          >
+                            <span>
+                              {f.quantity} × {f.servingLabel} {f.name}
+                            </span>
+                            <span className="flex items-center gap-2">
+                              <span className="tabular-nums text-muted">{f.calories} cal</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveRefinedIngredient(i)}
+                                aria-label={`Remove ${f.name}`}
+                                className="text-muted transition-colors hover:text-danger"
+                              >
+                                <X size={14} />
+                              </button>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    <div className="mt-2">
+                      <FoodPicker addLabel="Add ingredient" onAdd={handleAddRefinedIngredient} />
+                    </div>
+
+                    {refineError && (
+                      <p className="mt-2 text-[13px] text-danger">{refineError}</p>
+                    )}
+                  </div>
+                )}
+
                 <button
-                  onClick={() => setPhotoStatus("idle")}
+                  onClick={() => {
+                    setPhotoStatus("idle");
+                    setRefining(false);
+                    setRefinedIngredients([]);
+                  }}
                   className="mt-3 rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground shadow-soft transition-opacity hover:opacity-90"
                 >
                   Done
