@@ -26,6 +26,7 @@ var validSources = map[string]bool{
 	"barcode": true,
 	"repeat":  true,
 	"shared":  true,
+	"search":  true,
 }
 
 type Meal struct {

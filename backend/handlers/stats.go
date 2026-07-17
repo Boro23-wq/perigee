@@ -121,7 +121,7 @@ func computeWeeklyStats(ctx context.Context, userID string) (*weeklyStats, error
 
 	burnedByDate := map[string]int{}
 	burnRows, err := db.Pool.Query(ctx,
-		`SELECT date, SUM(calories_burned) FROM public.activity_logs
+		`SELECT date, SUM(calories_burned) FROM public.workout_logs
 		 WHERE user_id = $1 AND date BETWEEN $2 AND $3
 		 GROUP BY date`,
 		userID, weekStart.Format("2006-01-02"), weekEnd.Format("2006-01-02"),

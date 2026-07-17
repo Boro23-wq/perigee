@@ -10,24 +10,18 @@ import (
 )
 
 type logActivityRequest struct {
-	Date           string  `json:"date"`
-	Steps          *int    `json:"steps"`
-	WorkoutType    *string `json:"workout_type"`
-	WorkoutMinutes *int    `json:"workout_minutes"`
-	CaloriesBurned int     `json:"calories_burned"`
+	Date  string `json:"date"`
+	Steps *int   `json:"steps"`
 }
 
 type ActivityEntry struct {
-	Date           string  `json:"date"`
-	Steps          *int    `json:"steps"`
-	WorkoutType    *string `json:"workout_type"`
-	WorkoutMinutes *int    `json:"workout_minutes"`
-	CaloriesBurned int     `json:"calories_burned"`
+	Date  string `json:"date"`
+	Steps *int   `json:"steps"`
 }
 
-// LogActivity upserts a single activity summary per day — like weight,
-// re-logging the same day (e.g. updating steps later, or adding a workout)
-// replaces the row rather than erroring.
+// LogActivity upserts a single steps figure per day — steps genuinely is a
+// once-a-day summary (synced from a phone or entered once), unlike workouts
+// which live in workout_logs as one row per workout.
 func LogActivity(c *gin.Context) {
 	userID := c.GetString("user_id")
 
@@ -45,28 +39,15 @@ func LogActivity(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "steps must be between 0 and 200000"})
 		return
 	}
-	if req.WorkoutMinutes != nil && *req.WorkoutMinutes < 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "workout_minutes cannot be negative"})
-		return
-	}
-	if req.CaloriesBurned < 0 || req.CaloriesBurned > 5000 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "calories_burned must be between 0 and 5000"})
-		return
-	}
 
 	var entry ActivityEntry
 	err := db.Pool.QueryRow(c.Request.Context(),
-		`INSERT INTO public.activity_logs
-		   (user_id, date, steps, workout_type, workout_minutes, calories_burned)
-		 VALUES ($1, $2, $3, $4, $5, $6)
-		 ON CONFLICT (user_id, date)
-		   DO UPDATE SET steps = excluded.steps,
-		                 workout_type = excluded.workout_type,
-		                 workout_minutes = excluded.workout_minutes,
-		                 calories_burned = excluded.calories_burned
-		 RETURNING date, steps, workout_type, workout_minutes, calories_burned`,
-		userID, req.Date, req.Steps, req.WorkoutType, req.WorkoutMinutes, req.CaloriesBurned,
-	).Scan(&entry.Date, &entry.Steps, &entry.WorkoutType, &entry.WorkoutMinutes, &entry.CaloriesBurned)
+		`INSERT INTO public.activity_logs (user_id, date, steps)
+		 VALUES ($1, $2, $3)
+		 ON CONFLICT (user_id, date) DO UPDATE SET steps = excluded.steps
+		 RETURNING date, steps`,
+		userID, req.Date, req.Steps,
+	).Scan(&entry.Date, &entry.Steps)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to log activity"})
@@ -76,8 +57,7 @@ func LogActivity(c *gin.Context) {
 	c.JSON(http.StatusCreated, entry)
 }
 
-// GetActivity returns a single day's activity entry, or zero values if
-// nothing has been logged that day.
+// GetActivity returns a single day's steps, or null if nothing's logged yet.
 func GetActivity(c *gin.Context) {
 	userID := c.GetString("user_id")
 	dateParam := c.Query("date")
@@ -89,16 +69,12 @@ func GetActivity(c *gin.Context) {
 
 	var entry ActivityEntry
 	err := db.Pool.QueryRow(c.Request.Context(),
-		`SELECT date, steps, workout_type, workout_minutes, calories_burned
-		 FROM public.activity_logs WHERE user_id = $1 AND date = $2`,
+		`SELECT date, steps FROM public.activity_logs WHERE user_id = $1 AND date = $2`,
 		userID, dateParam,
-	).Scan(&entry.Date, &entry.Steps, &entry.WorkoutType, &entry.WorkoutMinutes, &entry.CaloriesBurned)
+	).Scan(&entry.Date, &entry.Steps)
 
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"date": dateParam, "steps": nil, "workout_type": nil,
-			"workout_minutes": nil, "calories_burned": 0,
-		})
+		c.JSON(http.StatusOK, gin.H{"date": dateParam, "steps": nil})
 		return
 	}
 

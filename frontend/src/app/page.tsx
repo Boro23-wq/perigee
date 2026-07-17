@@ -115,6 +115,13 @@ export default async function Home() {
         <p className="text-xs text-muted-2">
           Perigee, built for people who wanted to stop guessing.
         </p>
+        <p className="mt-1 text-xs text-muted-2">
+          {/* Begin fatsecret Platform API HTML Attribution Snippet */}
+          <a href="https://platform.fatsecret.com" className="underline underline-offset-2 hover:text-muted">
+            Powered by fatsecret Platform API
+          </a>
+          {/* End fatsecret Platform API HTML Attribution Snippet */}
+        </p>
       </footer>
     </div>
   );

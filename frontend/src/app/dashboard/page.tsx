@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/Skeleton";
 import { MealTypeBadge } from "@/components/MealTypeBadge";
 import { ConfidenceMeter } from "@/components/ConfidenceMeter";
 import { Sparkline } from "@/components/Sparkline";
+import { WorkoutIcon } from "@/components/WorkoutIcon";
 
 const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack", "drink"] as const;
 
@@ -94,9 +95,21 @@ type Streak = {
 type Activity = {
   date: string;
   steps: number | null;
-  workout_type: string | null;
-  workout_minutes: number | null;
+};
+
+type Exercise = {
+  id: string;
+  name: string;
+  met: number;
+};
+
+type Workout = {
+  id: string;
+  date: string;
+  name: string;
+  minutes: number | null;
   calories_burned: number;
+  created_at: string;
 };
 
 type PartnerStatus = {
@@ -166,6 +179,152 @@ function MacroBar({
   );
 }
 
+type WorkoutFormData = {
+  name: string;
+  minutes: number | null;
+  calories_burned: number;
+};
+
+// Always starts blank and resets after each add — workouts are one-to-many
+// per day now (mirrors food_logs), not a single form synced to one row.
+function WorkoutAddForm({
+  exercises,
+  currentWeightLbs,
+  submitting,
+  onAdd,
+}: {
+  exercises: Exercise[] | null;
+  currentWeightLbs: number | null;
+  submitting: boolean;
+  onAdd: (data: WorkoutFormData) => void;
+}) {
+  const [selectedExerciseId, setSelectedExerciseId] = useState("");
+  const [customName, setCustomName] = useState("");
+  const [minutesInput, setMinutesInput] = useState("");
+  const [caloriesOverride, setCaloriesOverride] = useState<string | null>(null);
+
+  const selectedExercise = exercises?.find((ex) => ex.id === selectedExerciseId) ?? null;
+  const minutes = Number(minutesInput) || 0;
+  // Net (active) calories: MET-1 excludes the resting metabolism the body
+  // burns anyway during that time. Crediting gross MET*weight*hours back
+  // into the daily budget would double-count metabolism already implicit
+  // in the budget itself.
+  const computedCalories =
+    selectedExercise && minutes > 0 && currentWeightLbs
+      ? Math.round(
+          Math.max(0, selectedExercise.met - 1) * (currentWeightLbs * 0.453592) * (minutes / 60)
+        )
+      : null;
+  const caloriesValue =
+    caloriesOverride ?? (computedCalories != null ? String(computedCalories) : "");
+
+  function reset() {
+    setSelectedExerciseId("");
+    setCustomName("");
+    setMinutesInput("");
+    setCaloriesOverride(null);
+  }
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    const name = selectedExercise ? selectedExercise.name : customName.trim();
+    if (!name) return;
+    onAdd({
+      name,
+      minutes: minutesInput ? Number(minutesInput) : null,
+      calories_burned: caloriesValue ? Number(caloriesValue) : 0,
+    });
+    reset();
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3 border-t border-border pt-4">
+      <p className="text-[13px] font-medium text-muted">Add a workout</p>
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-2">
+          {selectedExercise && (
+            <WorkoutIcon name={selectedExercise.name} size={16} className="shrink-0 text-accent" />
+          )}
+          <select
+            value={selectedExerciseId}
+            onChange={(e) => {
+              setSelectedExerciseId(e.target.value);
+              setCaloriesOverride(null);
+            }}
+            className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+          >
+            <option value="">{exercises ? "Other…" : "Loading…"}</option>
+            {exercises?.map((ex) => (
+              <option key={ex.id} value={ex.id}>
+                {ex.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        {!selectedExercise && (
+          <input
+            type="text"
+            placeholder="Custom workout name"
+            value={customName}
+            onChange={(e) => setCustomName(e.target.value)}
+            className="mt-1 rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+          />
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1">
+          <label htmlFor="workout_minutes" className="text-[13px] font-medium text-muted">
+            Minutes
+          </label>
+          <input
+            id="workout_minutes"
+            type="number"
+            min={0}
+            inputMode="numeric"
+            value={minutesInput}
+            onChange={(e) => {
+              setMinutesInput(e.target.value);
+              setCaloriesOverride(null);
+            }}
+            className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="workout_calories" className="text-[13px] font-medium text-muted">
+            Cal burned{" "}
+            {computedCalories != null && caloriesOverride === null && (
+              <span className="text-muted-2">(auto)</span>
+            )}
+          </label>
+          <input
+            id="workout_calories"
+            type="number"
+            min={0}
+            max={5000}
+            inputMode="numeric"
+            value={caloriesValue}
+            onChange={(e) => setCaloriesOverride(e.target.value)}
+            className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+          />
+        </div>
+      </div>
+
+      {selectedExercise && !currentWeightLbs && (
+        <p className="text-xs text-muted">Log a weigh-in to auto-calculate calories burned.</p>
+      )}
+
+      <button
+        type="submit"
+        disabled={submitting || (!selectedExercise && !customName.trim())}
+        className="rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground shadow-soft transition-opacity hover:opacity-90 disabled:opacity-50"
+      >
+        {submitting ? "Adding…" : "Add workout"}
+      </button>
+    </form>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
@@ -185,7 +344,11 @@ export default function DashboardPage() {
     null,
   );
   const [activity, setActivity] = useState<Activity | null>(null);
-  const [activitySubmitting, setActivitySubmitting] = useState(false);
+  const [stepsInput, setStepsInput] = useState("");
+  const [stepsSubmitting, setStepsSubmitting] = useState(false);
+  const [exercises, setExercises] = useState<Exercise[] | null>(null);
+  const [workouts, setWorkouts] = useState<Workout[] | null>(null);
+  const [workoutSubmitting, setWorkoutSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [partner, setPartner] = useState<PartnerStatus | null>(null);
   const [sharedIds, setSharedIds] = useState<Set<string>>(new Set());
@@ -237,6 +400,12 @@ export default function DashboardPage() {
   const loadActivity = useCallback(async () => {
     const data = await api.get(`/api/activity?date=${localDateString()}`);
     setActivity(data);
+    setStepsInput(data.steps != null ? String(data.steps) : "");
+  }, []);
+
+  const loadWorkouts = useCallback(async () => {
+    const data = await api.get(`/api/workouts?date=${localDateString()}`);
+    setWorkouts(data.workouts);
   }, []);
 
   const loadPartner = useCallback(async () => {
@@ -274,6 +443,13 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    api
+      .get("/api/exercises")
+      .then((data) => setExercises(data.exercises))
+      .catch(() => setExercises([]));
+  }, []);
+
+  useEffect(() => {
     const supabase = createClient();
 
     async function load() {
@@ -308,6 +484,7 @@ export default function DashboardPage() {
           loadStreak(),
           loadWeightSparkline(),
           loadActivity(),
+          loadWorkouts(),
           loadPartner(),
           loadCheckin(),
         ]);
@@ -327,6 +504,7 @@ export default function DashboardPage() {
     loadStreak,
     loadWeightSparkline,
     loadActivity,
+    loadWorkouts,
     loadPartner,
     loadCheckin,
     loadMilestones,
@@ -369,30 +547,47 @@ export default function DashboardPage() {
     });
   }, [meals, partner]);
 
-  async function handleActivitySubmit(e: FormEvent<HTMLFormElement>) {
+  async function handleStepsSubmit(e: FormEvent) {
     e.preventDefault();
-    setActivitySubmitting(true);
+    setStepsSubmitting(true);
     setError("");
-
-    const form = new FormData(e.currentTarget);
-    const steps = form.get("steps");
-    const workoutType = form.get("workout_type");
-    const workoutMinutes = form.get("workout_minutes");
-    const caloriesBurned = form.get("calories_burned");
 
     try {
       await api.post("/api/activity", {
         date: localDateString(),
-        steps: steps ? Number(steps) : null,
-        workout_type: workoutType ? String(workoutType) : null,
-        workout_minutes: workoutMinutes ? Number(workoutMinutes) : null,
-        calories_burned: caloriesBurned ? Number(caloriesBurned) : 0,
+        steps: stepsInput ? Number(stepsInput) : null,
       });
-      await Promise.all([loadActivity(), loadStats()]);
+      await loadActivity();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to log activity");
+      setError(err instanceof Error ? err.message : "Failed to log steps");
     } finally {
-      setActivitySubmitting(false);
+      setStepsSubmitting(false);
+    }
+  }
+
+  async function handleAddWorkout(data: WorkoutFormData) {
+    setWorkoutSubmitting(true);
+    setError("");
+
+    try {
+      await api.post("/api/workouts", { date: localDateString(), ...data });
+      await Promise.all([loadWorkouts(), loadStats()]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to log workout");
+    } finally {
+      setWorkoutSubmitting(false);
+    }
+  }
+
+  async function handleDeleteWorkout(id: string) {
+    const prev = workouts;
+    setWorkouts((cur) => cur?.filter((w) => w.id !== id) ?? null);
+    try {
+      await api.delete(`/api/workouts/${id}`);
+      await loadStats();
+    } catch (err) {
+      setWorkouts(prev ?? null);
+      setError(err instanceof Error ? err.message : "Failed to delete workout");
     }
   }
 
@@ -729,8 +924,8 @@ export default function DashboardPage() {
           )}
         </div>
 
-        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:grid-rows-2">
-          <div className="flex flex-col rounded-xl border border-border bg-surface p-5 shadow-soft sm:col-start-1 sm:row-start-1">
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="flex flex-col rounded-xl border border-border bg-surface p-5 shadow-soft">
             <p className="label-xs">Streak</p>
             <div className="mt-1 flex items-center justify-between gap-1.5">
               <div className="flex items-center gap-1.5">
@@ -770,7 +965,7 @@ export default function DashboardPage() {
 
           <Link
             href="/weight"
-            className="flex flex-col justify-between rounded-xl border border-border bg-surface p-5 shadow-soft transition-colors hover:border-accent sm:col-start-1 sm:row-start-2"
+            className="flex flex-col justify-between rounded-xl border border-border bg-surface p-5 shadow-soft transition-colors hover:border-accent"
           >
             <div className="flex items-start justify-between">
               <div>
@@ -789,121 +984,80 @@ export default function DashboardPage() {
               <Sparkline values={weightSparkline ?? []} />
             </div>
           </Link>
+        </div>
 
-          <div className="rounded-xl border border-border bg-surface p-5 shadow-soft sm:col-start-2 sm:row-start-1 sm:row-span-2">
-            <div className="flex w-full items-center justify-between text-left">
-              <div>
-                <p className="label-xs">Activity</p>
-                <p className="mt-1 text-base font-semibold tracking-tight">
-                  {activity?.calories_burned
-                    ? `${activity.calories_burned} cal burned`
-                    : "Log activity"}
-                </p>
-                {(activity?.steps || activity?.workout_type) && (
-                  <p className="mt-1 text-xs text-muted">
-                    {activity.steps
-                      ? `${activity.steps.toLocaleString()} steps`
-                      : ""}
-                    {activity.steps && activity.workout_type ? " · " : ""}
-                    {activity.workout_type
-                      ? `${activity.workout_type} ${activity.workout_minutes ?? ""}min`
-                      : ""}
-                  </p>
-                )}
-              </div>
+        <div className="mt-3 rounded-xl border border-border bg-surface p-5 shadow-soft">
+          <p className="label-xs">Activity</p>
+          <p className="mt-1 text-base font-semibold tracking-tight">
+            {workouts && workouts.length > 0
+              ? `${workouts.reduce((sum, w) => sum + w.calories_burned, 0)} cal burned`
+              : "Log activity"}
+          </p>
+          {activity?.steps ? (
+            <p className="mt-1 text-xs text-muted">{activity.steps.toLocaleString()} steps</p>
+          ) : null}
+
+          <form onSubmit={handleStepsSubmit} className="mt-3 flex items-end gap-2">
+            <div className="flex flex-1 flex-col gap-1">
+              <label htmlFor="steps" className="text-[13px] font-medium text-muted">
+                Steps
+              </label>
+              <input
+                id="steps"
+                type="number"
+                min={0}
+                max={200000}
+                inputMode="numeric"
+                value={stepsInput}
+                onChange={(e) => setStepsInput(e.target.value)}
+                className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
+              />
             </div>
-
-            <form
-              key={
-                activity
-                  ? `${activity.steps}-${activity.workout_type}-${activity.workout_minutes}-${activity.calories_burned}`
-                  : "empty"
-              }
-              onSubmit={handleActivitySubmit}
-              className="mt-4 flex flex-col gap-3"
+            <button
+              type="submit"
+              disabled={stepsSubmitting}
+              className="rounded-lg border border-border px-3 py-2 text-[13px] font-medium transition-colors hover:border-accent disabled:opacity-50"
             >
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1">
-                  <label
-                    htmlFor="steps"
-                    className="text-[13px] font-medium text-muted"
-                  >
-                    Steps
-                  </label>
-                  <input
-                    id="steps"
-                    name="steps"
-                    type="number"
-                    min={0}
-                    max={200000}
-                    inputMode="numeric"
-                    defaultValue={activity?.steps ?? ""}
-                    className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label
-                    htmlFor="calories_burned"
-                    className="text-[13px] font-medium text-muted"
-                  >
-                    Cal burned
-                  </label>
-                  <input
-                    id="calories_burned"
-                    name="calories_burned"
-                    type="number"
-                    min={0}
-                    max={5000}
-                    inputMode="numeric"
-                    defaultValue={activity?.calories_burned || ""}
-                    className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1">
-                  <label
-                    htmlFor="workout_type"
-                    className="text-[13px] font-medium text-muted"
-                  >
-                    Workout
-                  </label>
-                  <input
-                    id="workout_type"
-                    name="workout_type"
-                    type="text"
-                    placeholder="Running"
-                    defaultValue={activity?.workout_type ?? ""}
-                    className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label
-                    htmlFor="workout_minutes"
-                    className="text-[13px] font-medium text-muted"
-                  >
-                    Minutes
-                  </label>
-                  <input
-                    id="workout_minutes"
-                    name="workout_minutes"
-                    type="number"
-                    min={0}
-                    inputMode="numeric"
-                    defaultValue={activity?.workout_minutes ?? ""}
-                    className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
-                  />
-                </div>
-              </div>
-              <button
-                type="submit"
-                disabled={activitySubmitting}
-                className="mt-1 rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground shadow-soft transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                {activitySubmitting ? "Saving…" : "Save"}
-              </button>
-            </form>
-          </div>
+              {stepsSubmitting ? "…" : "Save"}
+            </button>
+          </form>
+
+          {workouts && workouts.length > 0 && (
+            <ul className="mt-3 flex max-h-56 flex-col gap-1.5 overflow-y-auto">
+              {workouts.map((w) => (
+                <li
+                  key={w.id}
+                  className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-[13px]"
+                >
+                  <span className="flex items-center gap-2">
+                    <WorkoutIcon name={w.name} size={14} className="shrink-0 text-accent" />
+                    <span>
+                      {w.name}
+                      {w.minutes != null && <span className="text-muted"> · {w.minutes}min</span>}
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="tabular-nums text-muted">{w.calories_burned} cal</span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteWorkout(w.id)}
+                      aria-label={`Delete ${w.name}`}
+                      className="text-muted transition-colors hover:text-danger"
+                    >
+                      <X size={14} />
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <WorkoutAddForm
+            exercises={exercises}
+            currentWeightLbs={stats?.weight_trend?.current_weight ?? null}
+            submitting={workoutSubmitting}
+            onAdd={handleAddWorkout}
+          />
         </div>
 
         <div className="mt-6 flex items-center justify-between">

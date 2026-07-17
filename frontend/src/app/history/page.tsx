@@ -8,6 +8,8 @@ import { api } from "@/lib/api";
 import { AppHeader } from "@/components/AppHeader";
 import { Skeleton } from "@/components/Skeleton";
 import { MealTypeBadge } from "@/components/MealTypeBadge";
+import { WorkoutIcon } from "@/components/WorkoutIcon";
+import { localDateString } from "@/lib/date";
 
 const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack", "drink"] as const;
 
@@ -24,6 +26,14 @@ type Meal = {
   photo_path: string | null;
 };
 
+type Workout = {
+  id: string;
+  date: string;
+  name: string;
+  minutes: number | null;
+  calories_burned: number;
+};
+
 function dateHeading(dateStr: string) {
   return new Date(dateStr + "T00:00:00").toLocaleDateString(undefined, {
     weekday: "long",
@@ -32,22 +42,25 @@ function dateHeading(dateStr: string) {
   });
 }
 
-function groupByDate(meals: Meal[]) {
-  const groups: { date: string; meals: Meal[] }[] = [];
-  for (const meal of meals) {
-    const group = groups[groups.length - 1];
-    if (group && group.date === meal.date) {
-      group.meals.push(meal);
-    } else {
-      groups.push({ date: meal.date, meals: [meal] });
-    }
+// Groups by the union of meal dates and workout dates, not just meal dates —
+// a day with a workout but no meals logged yet (e.g. today, before your
+// first meal) would otherwise never get a group at all.
+function groupByDate(meals: Meal[], workoutsByDate: Record<string, Workout[]>) {
+  const dateSet = new Set(meals.map((m) => m.date));
+  for (const date of Object.keys(workoutsByDate)) {
+    if (workoutsByDate[date].length > 0) dateSet.add(date);
   }
-  return groups;
+  const dates = Array.from(dateSet).sort((a, b) => (a < b ? 1 : -1));
+  return dates.map((date) => ({
+    date,
+    meals: meals.filter((m) => m.date === date),
+  }));
 }
 
 export default function HistoryPage() {
   const router = useRouter();
   const [meals, setMeals] = useState<Meal[]>([]);
+  const [workoutsByDate, setWorkoutsByDate] = useState<Record<string, Workout[]>>({});
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -86,6 +99,33 @@ export default function HistoryPage() {
     }
   }
 
+  // Workouts aren't paginated separately — each page of meals already
+  // defines a date span, so workouts for that same span are fetched
+  // alongside it rather than running an independent cursor/Load More.
+  // `includeToday` covers the one date that can have a workout with zero
+  // meals logged yet — today — which the first page's meal span alone
+  // might not reach.
+  async function loadWorkoutsForDates(pageMeals: Meal[], includeToday = false) {
+    const dates = pageMeals.map((m) => m.date);
+    if (includeToday) dates.push(localDateString());
+    if (dates.length === 0) return;
+    const start = dates.reduce((a, b) => (b < a ? b : a));
+    const end = dates.reduce((a, b) => (b > a ? b : a));
+    try {
+      const data = await api.get(`/api/workouts/range?start=${start}&end=${end}`);
+      const grouped: Record<string, Workout[]> = {};
+      for (const w of data.workouts as Workout[]) {
+        (grouped[w.date] ??= []).push(w);
+      }
+      setWorkoutsByDate((prev) => ({ ...prev, ...grouped }));
+    } catch (err) {
+      // Best-effort — history still works with just meals if this fails —
+      // but log it, silent failures here are exactly what made this hard
+      // to debug once already.
+      console.error("Failed to load workout history:", err);
+    }
+  }
+
   useEffect(() => {
     const supabase = createClient();
 
@@ -103,6 +143,7 @@ export default function HistoryPage() {
         setMeals(data.meals);
         setHasMore(data.has_more);
         loadThumbnails(data.meals);
+        loadWorkoutsForDates(data.meals, true);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load history");
       } finally {
@@ -122,6 +163,7 @@ export default function HistoryPage() {
       setMeals((prev) => [...prev, ...data.meals]);
       setHasMore(data.has_more);
       loadThumbnails(data.meals);
+      loadWorkoutsForDates(data.meals);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load more");
     } finally {
@@ -179,7 +221,7 @@ export default function HistoryPage() {
     }
   }
 
-  const groups = groupByDate(meals);
+  const groups = groupByDate(meals, workoutsByDate);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -218,6 +260,22 @@ export default function HistoryPage() {
           {groups.map((group) => (
             <div key={group.date}>
               <h2 className="label-xs">{dateHeading(group.date)}</h2>
+
+              {workoutsByDate[group.date] && workoutsByDate[group.date].length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {workoutsByDate[group.date].map((w) => (
+                    <span
+                      key={w.id}
+                      className="flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1.5 text-[11px] font-medium text-muted"
+                    >
+                      <WorkoutIcon name={w.name} size={16} className="shrink-0 text-accent" />
+                      {w.name}
+                      {w.minutes != null && ` · ${w.minutes}min`} · {w.calories_burned} cal
+                    </span>
+                  ))}
+                </div>
+              )}
+
               <div className="mt-2 flex flex-col gap-2">
                 {group.meals.map((m) => (
                   <div

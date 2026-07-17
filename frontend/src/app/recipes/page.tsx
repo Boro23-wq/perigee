@@ -6,6 +6,7 @@ import { Check, MoreVertical, Pencil, Search, Share2, Star, Trash2 } from "lucid
 import { api } from "@/lib/api";
 import { localDateString } from "@/lib/date";
 import { Skeleton } from "@/components/Skeleton";
+import { FoodPicker, type PickedFood } from "@/components/FoodPicker";
 
 type Recipe = {
   id: string;
@@ -82,7 +83,8 @@ export default function RecipesPage() {
   }, [debouncedSearch, tagFilter, favoritesOnly]);
 
   useEffect(() => {
-    loadRecipes();
+    const timer = setTimeout(() => loadRecipes(), 0);
+    return () => clearTimeout(timer);
   }, [loadRecipes]);
 
   async function toggleFavorite(recipe: Recipe) {
@@ -171,6 +173,23 @@ export default function RecipesPage() {
     setIngredientsText(recipe.ingredients.join("\n"));
     setTagsText(recipe.tags.join(", "));
     document.getElementById("recipeName")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  // Adds a searched food's macros into the running totals and appends a
+  // readable ingredient line — a convenience on top of the existing manual
+  // fields, not a replacement: totals stay editable afterward for anything
+  // FatSecret doesn't have a clean match for.
+  function handleAddIngredient(food: PickedFood) {
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    setCalories((prev) => String(Math.round((Number(prev) || 0) + food.calories)));
+    setProtein((prev) => String(round2((Number(prev) || 0) + food.protein)));
+    setCarbs((prev) => String(round2((Number(prev) || 0) + food.carbs)));
+    setFat((prev) => String(round2((Number(prev) || 0) + food.fat)));
+    setFiber((prev) => String(round2((Number(prev) || 0) + food.fiber)));
+    setIngredientsText((prev) => {
+      const line = `${food.quantity} × ${food.servingLabel} ${food.name}`;
+      return prev ? `${prev}\n${line}` : line;
+    });
   }
 
   async function handleCreate(e: FormEvent) {
@@ -393,7 +412,7 @@ export default function RecipesPage() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="flex flex-col gap-1 lg:col-span-3">
                 <label htmlFor="recipeName" className="text-[13px] font-medium text-muted">
-                  Name
+                  Name <span className="text-danger">*</span>
                 </label>
                 <input
                   id="recipeName"
@@ -406,7 +425,7 @@ export default function RecipesPage() {
               </div>
               <div className="flex flex-col gap-1">
                 <label htmlFor="servings" className="text-[13px] font-medium text-muted">
-                  Servings (whole batch)
+                  Servings (whole batch) <span className="text-danger">*</span>
                 </label>
                 <input
                   id="servings"
@@ -424,13 +443,14 @@ export default function RecipesPage() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="flex flex-col gap-1">
                 <label htmlFor="totalCalories" className="text-[13px] font-medium text-muted">
-                  Total cal
+                  Total cal <span className="text-danger">*</span>
                 </label>
                 <input
                   id="totalCalories"
                   type="number"
                   required
                   min={0}
+                  step="1"
                   value={calories}
                   onChange={(e) => setCalories(e.target.value)}
                   className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
@@ -444,6 +464,7 @@ export default function RecipesPage() {
                   id="totalProtein"
                   type="number"
                   min={0}
+                  step="0.01"
                   value={protein}
                   onChange={(e) => setProtein(e.target.value)}
                   className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
@@ -457,6 +478,7 @@ export default function RecipesPage() {
                   id="totalCarbs"
                   type="number"
                   min={0}
+                  step="0.01"
                   value={carbs}
                   onChange={(e) => setCarbs(e.target.value)}
                   className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
@@ -470,6 +492,7 @@ export default function RecipesPage() {
                   id="totalFat"
                   type="number"
                   min={0}
+                  step="0.01"
                   value={fat}
                   onChange={(e) => setFat(e.target.value)}
                   className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
@@ -483,6 +506,7 @@ export default function RecipesPage() {
                   id="totalFiber"
                   type="number"
                   min={0}
+                  step="0.01"
                   value={fiber}
                   onChange={(e) => setFiber(e.target.value)}
                   className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
@@ -501,6 +525,19 @@ export default function RecipesPage() {
                 placeholder="high-protein, quick, breakfast"
                 className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft"
               />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[13px] font-medium text-muted">
+                Add an ingredient (optional)
+              </label>
+              <p className="text-xs text-muted">
+                Search adds its macros to the totals above and a line below —
+                the totals stay editable if you need to adjust anything.
+              </p>
+              <div className="mt-1">
+                <FoodPicker addLabel="Add ingredient" onAdd={handleAddIngredient} />
+              </div>
             </div>
 
             <div className="flex flex-col gap-1">

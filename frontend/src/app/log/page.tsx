@@ -9,6 +9,7 @@ import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { Skeleton } from "@/components/Skeleton";
 import { MealTypeBadge } from "@/components/MealTypeBadge";
 import { ConfidenceMeter } from "@/components/ConfidenceMeter";
+import { FoodPicker, type PickedFood } from "@/components/FoodPicker";
 
 type Usual = {
   name: string;
@@ -90,6 +91,8 @@ export default function LogPage() {
   const [servings, setServings] = useState(1);
   const [gramsInput, setGramsInput] = useState("");
   const [barcodeSubmitting, setBarcodeSubmitting] = useState(false);
+
+  const [searchError, setSearchError] = useState("");
 
   useEffect(() => {
     api
@@ -245,6 +248,26 @@ export default function LogPage() {
     }
   }
 
+  async function handleAddSearchFood(food: PickedFood) {
+    setSearchError("");
+    try {
+      const meal = await api.post("/api/meals/search", {
+        date: localDateString(),
+        meal_type: mealType,
+        name: food.name,
+        calories: food.calories,
+        protein: food.protein,
+        carbs: food.carbs,
+        fat: food.fat,
+        fiber: food.fiber,
+        serving_grams: food.servingGrams,
+      });
+      showToast(`Logged ${food.name}`, meal.id);
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : "Failed to log meal");
+    }
+  }
+
   async function handleManualSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
@@ -302,7 +325,17 @@ export default function LogPage() {
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2">
+        <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <section>
+            <h2 className="label-xs">Search foods</h2>
+            <div className="mt-3">
+              <FoodPicker addLabel="Log" onAdd={handleAddSearchFood} />
+              {searchError && (
+                <p className="mt-2 text-[13px] text-danger">{searchError}</p>
+              )}
+            </div>
+          </section>
+
           <section>
             <h2 className="label-xs">Log with photo</h2>
             <input
