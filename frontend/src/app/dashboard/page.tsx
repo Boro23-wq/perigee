@@ -681,7 +681,7 @@ export default function DashboardPage() {
       setCheckin(data);
     } catch (err) {
       setCheckinError(
-        err instanceof Error ? err.message : "Coach is unavailable right now",
+        err instanceof Error ? err.message : "Kloppo is unavailable right now",
       );
     } finally {
       setCheckinMood(null);
@@ -794,7 +794,7 @@ export default function DashboardPage() {
 
         {checkinLoaded && (
           <div className="mt-3 rounded-xl border border-border bg-surface p-5 shadow-soft">
-            <p className="label-xs">Coach</p>
+            <p className="label-xs">Kloppo</p>
             {checkin ? (
               <>
                 <p className="mt-2 text-[13px] leading-relaxed text-foreground">

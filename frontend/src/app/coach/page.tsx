@@ -82,7 +82,7 @@ export default function CoachPage() {
         { role: "assistant", content: reply.content, animate: true },
       ]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Coach is unavailable right now");
+      setError(err instanceof Error ? err.message : "Kloppo is unavailable right now");
     } finally {
       setSending(false);
     }
@@ -94,11 +94,11 @@ export default function CoachPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-dvh flex-col overflow-hidden">
       <AppHeader />
 
       <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col px-6 pb-6 pt-6 sm:px-8">
-        <h1 className="text-xl font-semibold tracking-tight">Coach</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Kloppo</h1>
         <p className="mt-1 text-[13px] text-muted">
           Grounded in your real numbers: weight trend, calorie budget, and goal. Advisory
           only: it can&apos;t change settings or log anything for you.
@@ -116,7 +116,7 @@ export default function CoachPage() {
             {messages && messages.length === 0 && (
               <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
                 <p className="text-[13px] text-muted">
-                  Ask about your trend, a timeline, or a goal, and the coach will do the
+                  Ask about your trend, a timeline, or a goal, and Kloppo will do the
                   actual math against your real data.
                 </p>
                 <div className="flex flex-col gap-2">
@@ -162,7 +162,7 @@ export default function CoachPage() {
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask the coach anything…"
+              placeholder="Ask Kloppo anything…"
               disabled={sending}
               className="flex-1 rounded-lg border border-border bg-surface-2 px-3 py-2 text-[13px] outline-none transition-shadow focus:border-accent focus:ring-2 focus:ring-accent-soft disabled:opacity-60"
             />

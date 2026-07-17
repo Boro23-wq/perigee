@@ -45,7 +45,7 @@ const NAV_ITEMS = [
   { href: "/log", label: "Log", icon: PlusCircle, pinned: true },
   { href: "/weight", label: "Weight", icon: Scale, pinned: true },
   { href: "/history", label: "History", icon: History, pinned: false },
-  { href: "/coach", label: "Coach", icon: MessageCircle, pinned: false },
+  { href: "/coach", label: "Kloppo", icon: MessageCircle, pinned: false },
   { href: "/recipes", label: "Recipes", icon: UtensilsCrossed, pinned: false },
   { href: "/partner", label: "Partner", icon: Users, pinned: false },
   { href: "/profile", label: "Profile", icon: UserIcon, pinned: false },
