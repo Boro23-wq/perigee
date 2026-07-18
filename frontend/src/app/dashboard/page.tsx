@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { api } from "@/lib/api";
 import { localDateString } from "@/lib/date";
 import { AppHeader } from "@/components/AppHeader";
+import { Accordion } from "@/components/Accordion";
 import { Skeleton } from "@/components/Skeleton";
 import { MealTypeBadge } from "@/components/MealTypeBadge";
 import { ConfidenceMeter } from "@/components/ConfidenceMeter";
@@ -1097,16 +1098,32 @@ export default function DashboardPage() {
               Nothing logged yet today.
             </p>
           )}
-          {meals?.map((m) => {
-            const isShared = sharedIds.has(m.id);
-            const isNewShared = newSharedIds.has(m.id);
-            return (
-              <div
-                key={m.id}
-                className={`relative rounded-xl border border-border bg-surface px-4 py-2.5 ${
-                  isNewShared ? "animate-shared-in" : ""
-                }`}
-              >
+          {meals &&
+            meals.length > 0 &&
+            MEAL_TYPES.map((type) => {
+              const group = meals.filter((m) => m.meal_type === type);
+              if (group.length === 0) return null;
+              const groupCalories = group.reduce((sum, m) => sum + m.calories, 0);
+              return (
+                <Accordion
+                  key={type}
+                  defaultOpen
+                  title={`${type[0].toUpperCase() + type.slice(1)} · ${group.length} ${
+                    group.length === 1 ? "item" : "items"
+                  }`}
+                  subtitle={`${groupCalories} cal`}
+                >
+                  <div className="flex flex-col gap-2">
+                    {group.map((m) => {
+                      const isShared = sharedIds.has(m.id);
+                      const isNewShared = newSharedIds.has(m.id);
+                      return (
+                        <div
+                          key={m.id}
+                          className={`relative rounded-xl border border-border bg-surface px-4 py-2.5 ${
+                            isNewShared ? "animate-shared-in" : ""
+                          }`}
+                        >
                 {editingMealId === m.id ? (
                   <div className="flex flex-col gap-2">
                     <input
@@ -1264,9 +1281,13 @@ export default function DashboardPage() {
                     )}
                   </div>
                 )}
-              </div>
-            );
-          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Accordion>
+              );
+            })}
         </div>
       </main>
 
