@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays, ChevronLeft, ChevronRight, MoreVertical, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -56,6 +56,37 @@ function shiftDate(dateStr: string, days: number) {
   return `${y}-${m}-${day}`;
 }
 
+function startOfMonth(dateStr: string) {
+  const d = new Date(dateStr + "T00:00:00");
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+function addMonths(month: Date, delta: number) {
+  return new Date(month.getFullYear(), month.getMonth() + delta, 1);
+}
+
+function toDateString(year: number, month: number, day: number) {
+  const m = String(month + 1).padStart(2, "0");
+  const d = String(day).padStart(2, "0");
+  return `${year}-${m}-${d}`;
+}
+
+// One calendar cell per day of the month, null-padded at the front so the
+// first day lands under its correct weekday column.
+function buildCalendarCells(month: Date) {
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+  const firstWeekday = new Date(year, monthIndex, 1).getDay();
+  const numDays = new Date(year, monthIndex + 1, 0).getDate();
+
+  const cells: ({ day: number; dateStr: string } | null)[] = [];
+  for (let i = 0; i < firstWeekday; i++) cells.push(null);
+  for (let day = 1; day <= numDays; day++) {
+    cells.push({ day, dateStr: toDateString(year, monthIndex, day) });
+  }
+  return cells;
+}
+
 export default function HistoryPage() {
   const router = useRouter();
   const today = localDateString();
@@ -67,7 +98,8 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const dateInputRef = useRef<HTMLInputElement>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [viewMonth, setViewMonth] = useState(() => startOfMonth(today));
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
@@ -123,15 +155,20 @@ export default function HistoryPage() {
     loadDay(selectedDate);
   }, [authed, selectedDate, loadDay]);
 
-  function openDatePicker() {
-    const input = dateInputRef.current as (HTMLInputElement & { showPicker?: () => void }) | null;
-    if (!input) return;
-    if (typeof input.showPicker === "function") {
-      input.showPicker();
-    } else {
-      input.click();
-    }
+  function toggleCalendar() {
+    setViewMonth(startOfMonth(selectedDate));
+    setCalendarOpen((o) => !o);
   }
+
+  function pickDate(dateStr: string) {
+    setSelectedDate(dateStr);
+    setCalendarOpen(false);
+  }
+
+  const canGoNextMonth =
+    viewMonth.getFullYear() < startOfMonth(today).getFullYear() ||
+    (viewMonth.getFullYear() === startOfMonth(today).getFullYear() &&
+      viewMonth.getMonth() < startOfMonth(today).getMonth());
 
   function startEdit(m: Meal) {
     setOpenMenuId(null);
@@ -214,23 +251,76 @@ export default function HistoryPage() {
               <ChevronLeft size={18} />
             </button>
 
-            <button
-              type="button"
-              onClick={openDatePicker}
-              className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[15px] font-semibold transition-colors hover:bg-surface-2"
-            >
-              <CalendarDays size={16} className="text-muted" />
-              {dateHeading(selectedDate)}
-            </button>
-            <input
-              ref={dateInputRef}
-              type="date"
-              value={selectedDate}
-              max={today}
-              onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
-              className="sr-only"
-              tabIndex={-1}
-            />
+            <div className="relative">
+              <button
+                type="button"
+                onClick={toggleCalendar}
+                className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[15px] font-semibold transition-colors hover:bg-surface-2"
+              >
+                <CalendarDays size={16} className="text-muted" />
+                {dateHeading(selectedDate)}
+              </button>
+
+              {calendarOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setCalendarOpen(false)} />
+                  <div className="absolute left-0 top-11 z-20 w-72 rounded-xl border border-border bg-surface p-3 shadow-soft">
+                    <div className="flex items-center justify-between">
+                      <button
+                        onClick={() => setViewMonth((m) => addMonths(m, -1))}
+                        aria-label="Previous month"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <p className="text-[13px] font-semibold">
+                        {viewMonth.toLocaleDateString(undefined, {
+                          month: "long",
+                          year: "numeric",
+                        })}
+                      </p>
+                      <button
+                        onClick={() => setViewMonth((m) => addMonths(m, 1))}
+                        disabled={!canGoNextMonth}
+                        aria-label="Next month"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-30"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+
+                    <div className="mt-2 grid grid-cols-7 gap-1 text-center text-[11px] text-muted">
+                      {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+                        <span key={i}>{d}</span>
+                      ))}
+                    </div>
+
+                    <div className="mt-1 grid grid-cols-7 gap-1">
+                      {buildCalendarCells(viewMonth).map((cell, i) =>
+                        cell ? (
+                          <button
+                            key={cell.dateStr}
+                            onClick={() => pickDate(cell.dateStr)}
+                            disabled={cell.dateStr > today}
+                            className={`flex h-8 w-8 items-center justify-center rounded-lg text-[13px] transition-colors disabled:opacity-30 disabled:hover:bg-transparent ${
+                              cell.dateStr === selectedDate
+                                ? "bg-accent font-semibold text-accent-foreground"
+                                : cell.dateStr === today
+                                  ? "border border-accent text-foreground hover:bg-surface-2"
+                                  : "text-foreground hover:bg-surface-2"
+                            }`}
+                          >
+                            {cell.day}
+                          </button>
+                        ) : (
+                          <span key={i} />
+                        )
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
 
             <button
               onClick={() => setSelectedDate((d) => shiftDate(d, 1))}
