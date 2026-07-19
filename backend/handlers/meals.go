@@ -139,6 +139,129 @@ func LogMeal(c *gin.Context) {
 	c.JSON(http.StatusCreated, m)
 }
 
+type batchMealItem struct {
+	MealType     string   `json:"meal_type"`
+	Source       string   `json:"source"`
+	Name         string   `json:"name"`
+	Calories     int      `json:"calories"`
+	Protein      float64  `json:"protein"`
+	Carbs        float64  `json:"carbs"`
+	Fat          float64  `json:"fat"`
+	Fiber        float64  `json:"fiber"`
+	ServingGrams *float64 `json:"serving_grams"`
+}
+
+type logMealsBatchRequest struct {
+	Date  string          `json:"date"`
+	Meals []batchMealItem `json:"meals"`
+}
+
+// validBatchSources excludes 'photo' and 'shared' — photo meals are created
+// via the vision-analysis endpoint (which needs the uploaded image), and
+// shared meals are only ever created by ShareMeal on the partner's behalf.
+var validBatchSources = map[string]bool{
+	"manual":  true,
+	"search":  true,
+	"barcode": true,
+	"repeat":  true,
+}
+
+// LogMealsBatch inserts several food_logs rows for one date in a single
+// transaction — the "log a few items, review, then submit" flow on the
+// client sends everything it staged as one request instead of one round
+// trip per item, and either all rows land or none do.
+func LogMealsBatch(c *gin.Context) {
+	userID := c.GetString("user_id")
+
+	var req logMealsBatchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	date, err := time.Parse("2006-01-02", req.Date)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "date must be YYYY-MM-DD"})
+		return
+	}
+	now := time.Now().UTC()
+	if date.Before(now.AddDate(0, 0, -2)) || date.After(now.AddDate(0, 0, 2)) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "date out of allowed range"})
+		return
+	}
+
+	if len(req.Meals) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one meal is required"})
+		return
+	}
+	if len(req.Meals) > 50 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "too many meals in one batch"})
+		return
+	}
+
+	for _, m := range req.Meals {
+		if !validMealTypes[m.MealType] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid meal_type"})
+			return
+		}
+		if !validBatchSources[m.Source] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid source"})
+			return
+		}
+		if m.Name == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
+			return
+		}
+		if m.Calories < 0 || m.Calories > 10000 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "calories must be between 0 and 10000"})
+			return
+		}
+		if m.Protein < 0 || m.Carbs < 0 || m.Fat < 0 || m.Fiber < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "macros cannot be negative"})
+			return
+		}
+		if m.ServingGrams != nil && (*m.ServingGrams <= 0 || *m.ServingGrams > 5000) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "serving_grams must be between 0 and 5000"})
+			return
+		}
+	}
+
+	tx, err := db.Pool.Begin(c.Request.Context())
+	if err != nil {
+		log.Printf("LogMealsBatch begin error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to log meals"})
+		return
+	}
+	defer tx.Rollback(c.Request.Context())
+
+	meals := make([]Meal, 0, len(req.Meals))
+	for _, item := range req.Meals {
+		row := tx.QueryRow(c.Request.Context(),
+			`INSERT INTO public.food_logs
+			   (user_id, date, meal_type, source, name, calories, protein, carbs, fat, fiber, serving_grams)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			 RETURNING `+mealColumns,
+			userID, req.Date, item.MealType, item.Source, item.Name, item.Calories,
+			item.Protein, item.Carbs, item.Fat, item.Fiber, item.ServingGrams,
+		)
+		m, err := scanMeal(row)
+		if err != nil {
+			log.Printf("LogMealsBatch insert error: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to log meals"})
+			return
+		}
+		meals = append(meals, m)
+	}
+
+	if err := tx.Commit(c.Request.Context()); err != nil {
+		log.Printf("LogMealsBatch commit error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to log meals"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"meals": meals})
+}
+
 // ShareMeal copies one of the caller's logged meals straight into their
 // active partner's food_logs for the same date/meal type — no recipe object,
 // no accept step, since being partnered is already mutual consent.

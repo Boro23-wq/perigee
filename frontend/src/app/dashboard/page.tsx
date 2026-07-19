@@ -363,6 +363,7 @@ export default function DashboardPage() {
   const [banner, setBanner] = useState<string | null>(null);
   const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
   const [loadingPhotoId, setLoadingPhotoId] = useState<string | null>(null);
+  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const sharedCheckDone = useRef(false);
 
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
@@ -449,6 +450,21 @@ export default function DashboardPage() {
       .then((data) => setExercises(data.exercises))
       .catch(() => setExercises([]));
   }, []);
+
+  // Signed photo URLs expire quickly, so fetch one per photo-logged meal as
+  // soon as it appears and cache it locally instead of re-fetching on every
+  // render.
+  useEffect(() => {
+    const missing = (meals ?? []).filter((m) => m.photo_path && !photoUrls[m.id]);
+    if (missing.length === 0) return;
+
+    missing.forEach((m) => {
+      api
+        .get(`/api/meals/${m.id}/photo-url`)
+        .then(({ url }) => setPhotoUrls((prev) => ({ ...prev, [m.id]: url })))
+        .catch(() => {});
+    });
+  }, [meals, photoUrls]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -1120,7 +1136,7 @@ export default function DashboardPage() {
                       return (
                         <div
                           key={m.id}
-                          className={`relative rounded-xl border border-border bg-surface px-4 py-2.5 ${
+                          className={`relative rounded-lg bg-surface-2 px-4 py-2.5 ${
                             isNewShared ? "animate-shared-in" : ""
                           }`}
                         >
@@ -1214,21 +1230,36 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                   <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-[13px] font-medium">{m.name}</p>
-                      <div className="mt-1 flex items-center gap-1.5 text-xs text-muted">
-                        <span>{m.calories} cal</span>
-                        <MealTypeBadge type={m.meal_type} />
-                        {m.source === "photo" && m.ai_confidence && (
-                          <ConfidenceMeter confidence={m.ai_confidence} />
+                    <div className="flex items-center gap-3">
+                      {m.photo_path && photoUrls[m.id] && (
+                        <button
+                          type="button"
+                          onClick={() => setViewingPhotoUrl(photoUrls[m.id])}
+                          className="shrink-0 overflow-hidden rounded-lg"
+                        >
+                          <img
+                            src={photoUrls[m.id]}
+                            alt={m.name}
+                            className="h-11 w-11 rounded-lg object-cover"
+                          />
+                        </button>
+                      )}
+                      <div>
+                        <p className="text-[13px] font-medium">{m.name}</p>
+                        <div className="mt-1 flex items-center gap-1.5 text-xs text-muted">
+                          <span>{m.calories} cal</span>
+                          <MealTypeBadge type={m.meal_type} />
+                          {m.source === "photo" && m.ai_confidence && (
+                            <ConfidenceMeter confidence={m.ai_confidence} />
+                          )}
+                        </div>
+                        {(isShared || m.source === "shared") && (
+                          <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
+                            <Check size={11} />
+                            {m.source === "shared" ? "Shared with you" : `Shared with ${partnerName}`}
+                          </span>
                         )}
                       </div>
-                      {(isShared || m.source === "shared") && (
-                        <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
-                          <Check size={11} />
-                          {m.source === "shared" ? "Shared with you" : `Shared with ${partnerName}`}
-                        </span>
-                      )}
                     </div>
 
                     <button

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { X } from "lucide-react";
 import imageCompression from "browser-image-compression";
 import { api } from "@/lib/api";
 import { localDateString } from "@/lib/date";
@@ -39,6 +40,19 @@ type PhotoMeal = {
   ai_confidence: "low" | "medium" | "high" | null;
 };
 
+type CartItem = {
+  key: string;
+  source: "manual" | "search" | "barcode" | "repeat";
+  meal_type: string;
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+  serving_grams?: number;
+};
+
 type BarcodeProduct = {
   name: string;
   calories_per_100g: number;
@@ -71,7 +85,6 @@ export default function LogPage() {
   const [carbs, setCarbs] = useState("");
   const [fat, setFat] = useState("");
   const [fiber, setFiber] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -95,9 +108,12 @@ export default function LogPage() {
   const [barcodeProduct, setBarcodeProduct] = useState<BarcodeProduct | null>(null);
   const [servings, setServings] = useState(1);
   const [gramsInput, setGramsInput] = useState("");
-  const [barcodeSubmitting, setBarcodeSubmitting] = useState(false);
 
   const [searchError, setSearchError] = useState("");
+
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [loggingCart, setLoggingCart] = useState(false);
+  const [cartError, setCartError] = useState("");
 
   useEffect(() => {
     api
@@ -106,32 +122,57 @@ export default function LogPage() {
       .catch(() => setUsuals([]));
   }, []);
 
-  function showToast(message: string, loggedId: string) {
+  function showToast(message: string, loggedIds: string[]) {
     const undo = async () => {
       setToast(null);
-      await api.delete(`/api/meals/${loggedId}`).catch(() => {});
+      await Promise.all(loggedIds.map((id) => api.delete(`/api/meals/${id}`).catch(() => {})));
     };
     setToast({ message, onUndo: undo });
     setTimeout(() => setToast((t) => (t?.onUndo === undo ? null : t)), 5000);
   }
 
-  async function logUsual(u: Usual) {
+  function addToCart(item: Omit<CartItem, "key">) {
+    setCart((c) => [...c, { ...item, key: crypto.randomUUID() }]);
+  }
+
+  function removeFromCart(key: string) {
+    setCart((c) => c.filter((i) => i.key !== key));
+  }
+
+  async function submitCart() {
+    if (cart.length === 0) return;
+    setLoggingCart(true);
+    setCartError("");
+
     try {
-      const meal = await api.post("/api/meals", {
+      const { meals } = await api.post("/api/meals/batch", {
         date: localDateString(),
-        meal_type: u.meal_type,
-        source: "repeat",
-        name: u.name,
-        calories: u.calories,
-        protein: u.protein,
-        carbs: u.carbs,
-        fat: u.fat,
-        fiber: u.fiber,
+        meals: cart.map(({ key: _key, ...rest }) => rest),
       });
-      showToast(`Logged ${u.name}`, meal.id);
+      const count = cart.length;
+      showToast(
+        `Logged ${count} item${count === 1 ? "" : "s"}`,
+        meals.map((m: { id: string }) => m.id)
+      );
+      setCart([]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to log meal");
+      setCartError(err instanceof Error ? err.message : "Failed to log meals");
+    } finally {
+      setLoggingCart(false);
     }
+  }
+
+  function logUsual(u: Usual) {
+    addToCart({
+      source: "repeat",
+      meal_type: u.meal_type,
+      name: u.name,
+      calories: u.calories,
+      protein: u.protein,
+      carbs: u.carbs,
+      fat: u.fat,
+      fiber: u.fiber,
+    });
   }
 
   async function handlePhotoSelect(e: ChangeEvent<HTMLInputElement>) {
@@ -172,7 +213,7 @@ export default function LogPage() {
       setPhotoResult(meal);
       setAdjustedCalories(meal.calories);
       setPhotoStatus("result");
-      showToast(`Logged ${meal.name}`, meal.id);
+      showToast(`Logged ${meal.name}`, [meal.id]);
     } catch (err) {
       setPhotoError(err instanceof Error ? err.message : "Failed to analyze photo");
       setPhotoStatus("error");
@@ -255,82 +296,59 @@ export default function LogPage() {
   const barcodeFat = barcodeProduct ? (barcodeProduct.fat_per_100g * gramsEaten) / 100 : 0;
   const barcodeFiber = barcodeProduct ? (barcodeProduct.fiber_per_100g * gramsEaten) / 100 : 0;
 
-  async function handleLogBarcode() {
+  function handleAddBarcode() {
     if (!barcodeProduct || gramsEaten <= 0) return;
-    setBarcodeSubmitting(true);
-    setBarcodeError("");
-
-    try {
-      const meal = await api.post("/api/meals/barcode", {
-        date: localDateString(),
-        meal_type: mealType,
-        name: barcodeProduct.name,
-        calories: barcodeCalories,
-        protein: barcodeProtein,
-        carbs: barcodeCarbs,
-        fat: barcodeFat,
-        fiber: barcodeFiber,
-        serving_grams: gramsEaten,
-      });
-      showToast(`Logged ${barcodeProduct.name}`, meal.id);
-      setBarcodeStatus("idle");
-      setBarcodeProduct(null);
-    } catch (err) {
-      setBarcodeError(err instanceof Error ? err.message : "Failed to log meal");
-    } finally {
-      setBarcodeSubmitting(false);
-    }
+    addToCart({
+      source: "barcode",
+      meal_type: mealType,
+      name: barcodeProduct.name,
+      calories: barcodeCalories,
+      protein: barcodeProtein,
+      carbs: barcodeCarbs,
+      fat: barcodeFat,
+      fiber: barcodeFiber,
+      serving_grams: gramsEaten,
+    });
+    setBarcodeStatus("idle");
+    setBarcodeProduct(null);
   }
 
-  async function handleAddSearchFood(food: PickedFood) {
+  function handleAddSearchFood(food: PickedFood) {
     setSearchError("");
-    try {
-      const meal = await api.post("/api/meals/search", {
-        date: localDateString(),
-        meal_type: mealType,
-        name: food.name,
-        calories: food.calories,
-        protein: food.protein,
-        carbs: food.carbs,
-        fat: food.fat,
-        fiber: food.fiber,
-        serving_grams: food.servingGrams,
-      });
-      showToast(`Logged ${food.name}`, meal.id);
-    } catch (err) {
-      setSearchError(err instanceof Error ? err.message : "Failed to log meal");
-    }
+    addToCart({
+      source: "search",
+      meal_type: mealType,
+      name: food.name,
+      calories: food.calories,
+      protein: food.protein,
+      carbs: food.carbs,
+      fat: food.fat,
+      fiber: food.fiber,
+      serving_grams: food.servingGrams ?? undefined,
+    });
   }
 
-  async function handleManualSubmit(e: FormEvent) {
+  function handleManualSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
-    setSubmitting(true);
+    if (!name.trim() || !calories) return;
 
-    try {
-      const meal = await api.post("/api/meals", {
-        date: localDateString(),
-        meal_type: mealType,
-        source: "manual",
-        name,
-        calories: Number(calories),
-        protein: protein ? Number(protein) : 0,
-        carbs: carbs ? Number(carbs) : 0,
-        fat: fat ? Number(fat) : 0,
-        fiber: fiber ? Number(fiber) : 0,
-      });
-      showToast(`Logged ${name}`, meal.id);
-      setName("");
-      setCalories("");
-      setProtein("");
-      setCarbs("");
-      setFat("");
-      setFiber("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to log meal");
-    } finally {
-      setSubmitting(false);
-    }
+    addToCart({
+      source: "manual",
+      meal_type: mealType,
+      name: name.trim(),
+      calories: Number(calories),
+      protein: protein ? Number(protein) : 0,
+      carbs: carbs ? Number(carbs) : 0,
+      fat: fat ? Number(fat) : 0,
+      fiber: fiber ? Number(fiber) : 0,
+    });
+    setName("");
+    setCalories("");
+    setProtein("");
+    setCarbs("");
+    setFat("");
+    setFiber("");
   }
 
   return (
@@ -359,11 +377,72 @@ export default function LogPage() {
           </div>
         </div>
 
+        {cart.length > 0 && (
+          <div className="mt-6 rounded-xl border border-accent/40 bg-accent-soft/40 p-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[13px] font-semibold">
+                Ready to log · {cart.length} {cart.length === 1 ? "item" : "items"}
+              </h2>
+              <span className="text-[13px] font-medium text-muted">
+                {cart.reduce((sum, i) => sum + i.calories, 0)} cal
+              </span>
+            </div>
+
+            <ul className="mt-3 flex flex-col gap-2">
+              {cart.map((item) => (
+                <li
+                  key={item.key}
+                  className="flex items-center justify-between rounded-lg bg-surface px-3 py-2"
+                >
+                  <div>
+                    <p className="text-[13px] font-medium">{item.name}</p>
+                    <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
+                      <span>{item.calories} cal</span>
+                      <MealTypeBadge type={item.meal_type} />
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => removeFromCart(item.key)}
+                    aria-label={`Remove ${item.name}`}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                  >
+                    <X size={16} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+
+            {cartError && <p className="mt-2 text-[13px] text-danger">{cartError}</p>}
+
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={submitCart}
+                disabled={loggingCart}
+                className="rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground shadow-soft transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {loggingCart
+                  ? "Logging…"
+                  : `Log ${cart.length} ${cart.length === 1 ? "item" : "items"}`}
+              </button>
+              <button
+                onClick={() => setCart([])}
+                disabled={loggingCart}
+                className="rounded-lg border border-border bg-surface px-4 py-2 text-[13px] font-medium transition-colors hover:border-accent disabled:opacity-50"
+              >
+                Clear
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-muted">
+              Add more items below, or log what you have.
+            </p>
+          </div>
+        )}
+
         <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           <section>
             <h2 className="label-xs">Search foods</h2>
             <div className="mt-3">
-              <FoodPicker addLabel="Log" onAdd={handleAddSearchFood} />
+              <FoodPicker onAdd={handleAddSearchFood} />
               {searchError && (
                 <p className="mt-2 text-[13px] text-danger">{searchError}</p>
               )}
@@ -550,11 +629,11 @@ export default function LogPage() {
 
                 <div className="mt-3 flex gap-2">
                   <button
-                    onClick={handleLogBarcode}
-                    disabled={barcodeSubmitting || gramsEaten <= 0}
+                    onClick={handleAddBarcode}
+                    disabled={gramsEaten <= 0}
                     className="rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground shadow-soft transition-opacity hover:opacity-90 disabled:opacity-50"
                   >
-                    {barcodeSubmitting ? "Logging…" : "Log"}
+                    Add to log
                   </button>
                   <button
                     onClick={() => {
@@ -710,10 +789,9 @@ export default function LogPage() {
 
             <button
               type="submit"
-              disabled={submitting}
               className="rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground shadow-soft transition-opacity hover:opacity-90 disabled:opacity-50 sm:col-span-2 lg:col-span-4"
             >
-              {submitting ? "Logging…" : "Log meal"}
+              Add to log
             </button>
           </form>
         </section>
