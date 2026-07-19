@@ -100,6 +100,7 @@ export default function HistoryPage() {
 
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(today));
+  const [loggedDates, setLoggedDates] = useState<Set<string>>(new Set());
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
@@ -154,6 +155,24 @@ export default function HistoryPage() {
     if (!authed) return;
     loadDay(selectedDate);
   }, [authed, selectedDate, loadDay]);
+
+  // Fetches which days in the visible calendar month have anything logged,
+  // so the picker can show a dot under them — cached per month already
+  // fetched, so flipping between months you've seen doesn't re-fetch.
+  useEffect(() => {
+    if (!authed || !calendarOpen) return;
+    const year = viewMonth.getFullYear();
+    const month = viewMonth.getMonth();
+    const start = toDateString(year, month, 1);
+    const end = toDateString(year, month, new Date(year, month + 1, 0).getDate());
+
+    api
+      .get(`/api/history/logged-dates?start=${start}&end=${end}`)
+      .then(({ dates }: { dates: string[] }) => {
+        setLoggedDates((prev) => new Set([...prev, ...dates]));
+      })
+      .catch(() => {});
+  }, [authed, calendarOpen, viewMonth]);
 
   function toggleCalendar() {
     setViewMonth(startOfMonth(selectedDate));
@@ -302,7 +321,7 @@ export default function HistoryPage() {
                             key={cell.dateStr}
                             onClick={() => pickDate(cell.dateStr)}
                             disabled={cell.dateStr > today}
-                            className={`flex h-8 w-8 items-center justify-center rounded-lg text-[13px] transition-colors disabled:opacity-30 disabled:hover:bg-transparent ${
+                            className={`relative flex h-8 w-8 flex-col items-center justify-center rounded-lg text-[13px] transition-colors disabled:opacity-30 disabled:hover:bg-transparent ${
                               cell.dateStr === selectedDate
                                 ? "bg-accent font-semibold text-accent-foreground"
                                 : cell.dateStr === today
@@ -311,6 +330,13 @@ export default function HistoryPage() {
                             }`}
                           >
                             {cell.day}
+                            {loggedDates.has(cell.dateStr) && (
+                              <span
+                                className={`absolute bottom-1 h-1 w-1 rounded-full ${
+                                  cell.dateStr === selectedDate ? "bg-accent-foreground" : "bg-accent"
+                                }`}
+                              />
+                            )}
                           </button>
                         ) : (
                           <span key={i} />

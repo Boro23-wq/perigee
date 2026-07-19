@@ -49,6 +49,7 @@ func main() {
 		api.GET("/meals", handlers.GetMeals)
 		api.GET("/meals/usuals", handlers.GetUsuals)
 		api.GET("/meals/history", handlers.GetMealsHistory)
+		api.GET("/history/logged-dates", handlers.GetLoggedDates)
 		api.DELETE("/meals/:id", handlers.DeleteMeal)
 		api.PATCH("/meals/:id", handlers.UpdateMeal)
 		api.PATCH("/meals/:id/adjust", handlers.AdjustMeal)
